@@ -44,6 +44,10 @@ Testing resumed with explicit permission while Art Mode was on. Verified on a
   identity check, and removal of only positively identified generated test assets.
 - Original artwork, original landscape and portrait matte values, and Art Mode state
   restored; both tested artworks' matte values verified after restoration.
+- A subsequent human visual test confirmed the border stayed light after the black
+  matte write, then turned black after re-selecting the same artwork. The tested TV
+  requires re-selection; this was saved in its private capability profile and enabled
+  in its settings. Original antique matte was restored and artwork re-selected afterward.
 
 Live testing uncovered and fixed MY_ personal content IDs, uppercase matte defaults,
 delayed selection readback, and probe restoration of separate portrait matte values.
@@ -53,7 +57,6 @@ No firmware, unrelated settings or power commands were used. No user artwork was
 
 Remaining unverified checks:
 
-- Human confirmation of visibly changed pixels and whether re-selection is needed.
 - Artwork-change events initiated specifically by the physical remote (an independent
   local API client was verified).
 - Real room photographs containing the displayed reference pattern; ordinary snapshot

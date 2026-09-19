@@ -171,8 +171,9 @@ thumbnails, local analysis, and manual/automatic matte writes by API readback.
 An independent client selection produced an `image_selected` event. Calibration
 art uploaded and selected without a matte; generated assets were positively
 identified and removed. Original artwork and both original matte values were restored.
-Physical pixel redraw/re-selection still requires a human visual observation;
-API readback does not prove it. Remote-button event testing, actual reference-pattern
+Human observation confirmed that this TV requires re-selection of the current artwork
+for the matte to visibly redraw; its device setting was saved accordingly. Other TVs
+still require their own visual test. Remote-button event testing, actual reference-pattern
 room photography, overnight unattended operation and TrueNAS installation remain
 separate checks. See [the validation record](docs/VALIDATION.md).
 
