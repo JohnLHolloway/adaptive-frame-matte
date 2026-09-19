@@ -11,6 +11,7 @@ DEFAULTS = {
     "cooldown": 300,
     "poll_seconds": 10,
     "neutral_preference": 1.0,
+    "accent_influence": 5.0,
     "weights": {"edge": 30, "wall": 25, "palette": 15, "room": 10, "lightness": 10, "neutral": 10},
     "profile_mode": "auto",
     "schedule": "fixed",

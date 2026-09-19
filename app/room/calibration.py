@@ -9,6 +9,8 @@ from app.artwork.analyzer import load_image
 from app.artwork.palette import delta_e, hex_color, palette, to_lab, to_rgb
 from app.room.masking import automatic_mask, refine_mask
 from app.room.pattern import MARKERS, PATCHES, SIZE, generate, patch_box
+from app.room.snapshot import detect_tv, wall_near_tv
+from app.room.surroundings import surrounding_palette
 
 log = logging.getLogger(__name__)
 
@@ -114,6 +116,70 @@ class RoomCalibrationService:
         self.directory = db.directory / "room"
         self.directory.mkdir(exist_ok=True)
 
+    @staticmethod
+    def snapshot_metadata(result, confidence):
+        result.update(
+            source="snapshot",
+            reference_error_delta_e=None,
+            ambient_cast=None,
+            color_corrected=False,
+            detection_confidence=confidence,
+            confidence=round(
+                min(0.60, confidence * 0.75) * max(0.4, 1 - result["variability"] / 60), 2
+            ),
+        )
+        return result
+
+    def preview(self, rgb, mask, corners, profile):
+        overlay = rgb.copy()
+        overlay[mask] = (overlay[mask] * 0.75 + np.array([55, 170, 100]) * 0.25).astype(np.uint8)
+        cv2.polylines(overlay, [np.rint(corners).astype(np.int32)], True, (245, 215, 115), 3)
+        filename = f"{profile}-detection.png"
+        Image.fromarray(overlay).save(self.directory / filename)
+        return filename
+
+    def snapshot(self, data, profile, normalized_corners=None):
+        """An ordinary room photo needs no television operation or reference artwork."""
+        image = load_image(data)
+        image.thumbnail((2400, 1800))
+        rgb = np.array(image)
+        if normalized_corners is None:
+            corners, confidence = detect_tv(rgb)
+            if confidence < 0.5:
+                raise ValueError("TV detection is ambiguous. Tap its four corners to continue.")
+        else:
+            points = np.asarray(normalized_corners, dtype=float)
+            if (
+                points.shape != (4, 2)
+                or not np.isfinite(points).all()
+                or np.any(points < 0)
+                or np.any(points > 1)
+            ):
+                raise ValueError("Provide four TV corners inside the photo")
+            corners = (points * [image.width, image.height]).astype(np.float32)
+            if (
+                not cv2.isContourConvex(corners)
+                or cv2.contourArea(corners) < image.width * image.height * 0.015
+            ):
+                raise ValueError("Tap the four TV corners in clockwise order, starting at top left")
+            confidence = 0.75
+        mask = refine_mask(rgb, wall_near_tv(rgb.shape, corners))
+        matrix = np.vstack([np.eye(3), np.zeros(3)])
+        result = self.snapshot_metadata(measure(rgb, mask, matrix, 0), confidence)
+        result.update(surrounding_palette(rgb, corners, result["wall_lab"], matrix))
+        image.save(self.directory / f"{profile}.png")
+        Image.fromarray(mask.astype(np.uint8) * 255).save(self.directory / f"{profile}-mask.png")
+        result.update(
+            corners=corners.tolist(),
+            matrix=matrix.tolist(),
+            photo=f"{profile}.png",
+            mask=f"{profile}-mask.png",
+            detection=self.preview(rgb, mask, corners, profile),
+        )
+        self.db.put("rooms", profile, result)
+        log.info("CALIBRATION_COMPLETED source=snapshot")
+        return result
+
     def process(self, data, profile):
         image = load_image(data)
         image.thumbnail((2400, 1800))
@@ -127,6 +193,7 @@ class RoomCalibrationService:
         region = automatic_mask(rgb.shape, corners)
         mask = refine_mask(rgb, region)
         result = measure(rgb, mask, matrix, error)
+        result.update(surrounding_palette(rgb, corners, result["wall_lab"], matrix))
         image.save(self.directory / f"{profile}.png")  # Strip EXIF/location metadata.
         Image.fromarray(mask.astype(np.uint8) * 255).save(self.directory / f"{profile}-mask.png")
         result.update(
@@ -143,8 +210,8 @@ class RoomCalibrationService:
 
     def remask(self, profile, data=None):
         old = self.db.get("rooms", profile)
-        if not old or old.get("source") != "guided":
-            raise ValueError("Upload a guided calibration photo first")
+        if not old or old.get("source") not in ("guided", "snapshot"):
+            raise ValueError("Upload a room photo first")
         rgb = np.array(Image.open(self.directory / f"{profile}.png").convert("RGB"))
         if data:
             mask_image = load_image(data)
@@ -156,11 +223,22 @@ class RoomCalibrationService:
             cv2.fillConvexPoly(tv, np.int32(old["corners"]), 255)
             mask &= tv == 0
         else:
-            mask = refine_mask(rgb, automatic_mask(rgb.shape, old["corners"]))
+            region = (
+                wall_near_tv(rgb.shape, old["corners"])
+                if old["source"] == "snapshot"
+                else automatic_mask(rgb.shape, old["corners"])
+            )
+            mask = refine_mask(rgb, region)
         result = {
             **old,
-            **measure(rgb, mask, np.array(old["matrix"]), old["reference_error_delta_e"]),
+            **measure(rgb, mask, np.array(old["matrix"]), old["reference_error_delta_e"] or 0),
         }
+        if old["source"] == "snapshot":
+            result = self.snapshot_metadata(result, old["detection_confidence"])
+        result.update(
+            surrounding_palette(rgb, old["corners"], result["wall_lab"], np.array(old["matrix"]))
+        )
+        result["detection"] = self.preview(rgb, mask, old["corners"], profile)
         Image.fromarray(mask.astype(np.uint8) * 255).save(self.directory / f"{profile}-mask.png")
         self.db.put("rooms", profile, result)
         return result

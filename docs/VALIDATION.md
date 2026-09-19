@@ -5,7 +5,7 @@ not a compatibility promise for every Samsung TV or firmware.
 
 ## Automated and browser checks
 
-- 49 pytest tests pass on Python 3.13 (Windows development environment).
+- 57 pytest tests pass on Python 3.13 (Windows development environment).
 - Ruff checks pass; Python compilation succeeds.
 - Desktop Chromium: Dashboard, Setup, Room, Artwork, Mattes, Strategy, History,
   Diagnostics and Settings render with no JavaScript errors.
@@ -14,6 +14,10 @@ not a compatibility promise for every Samsung TV or firmware.
 - Guided calibration exercised through HTTP with an original synthetic photograph:
   reference display, photograph upload, pattern detection, profile generation,
   browser mask editing/save and original-artwork restoration in mock mode.
+- Ordinary snapshot detection checked against a private user-provided phone photo:
+  TV located, nearby wall sampled automatically, screen/curtains/mantel excluded.
+  That photograph and its measurements are not in the repository. Synthetic tests
+  cover automatic detection, sampling, confidence limits and four-corner fallback.
 - Linux Python 3.12 Docker build, non-root runtime, read-only filesystem and
   `/healthz` healthcheck tested. Container artwork change and day/night evaluation
   exercised in mock mode. A container restart preserves profiles, settings/history.

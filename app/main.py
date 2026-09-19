@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import re
 import secrets
@@ -8,7 +9,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
-from fastapi import FastAPI, HTTPException, Request, UploadFile
+from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -35,6 +36,7 @@ class SettingsUpdate(BaseModel):
     threshold: float | None = Field(None, ge=0, le=100)
     cooldown: int | None = Field(None, ge=0, le=86400)
     neutral_preference: float | None = Field(None, ge=0, le=3)
+    accent_influence: float | None = Field(None, ge=0, le=10)
     weights: dict[str, float] | None = None
     profile_mode: str | None = None
     schedule: str | None = None
@@ -227,7 +229,13 @@ def create_app(directory=None, mock=None):
             w.save_settings(
                 {
                     k: config.DEFAULTS[k]
-                    for k in ("strategy", "weights", "neutral_preference", "threshold")
+                    for k in (
+                        "strategy",
+                        "weights",
+                        "neutral_preference",
+                        "threshold",
+                        "accent_influence",
+                    )
                 }
             )
         else:
@@ -280,6 +288,15 @@ def create_app(directory=None, mock=None):
     async def photo(profile, file: UploadFile):
         result = await asyncio.to_thread(
             app.state.calibration.process, await image_bytes(file), profile_name(profile)
+        )
+        watcher().key = None
+        return result
+
+    @app.post("/api/room/{profile}/snapshot")
+    async def snapshot(profile: str, file: UploadFile, corners: str | None = Form(None)):
+        points = json.loads(corners) if corners else None
+        result = await asyncio.to_thread(
+            app.state.calibration.snapshot, await image_bytes(file), profile_name(profile), points
         )
         watcher().key = None
         return result

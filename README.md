@@ -21,7 +21,8 @@ source files are not downloaded, and no DRM or authentication is bypassed.
 - Queries the device's matte families/colors, including RGB when the TV reports it.
 - Analyzes thumbnails in CIELAB with CIEDE2000 and a separate 12.5% perimeter palette.
 - Scores every enabled candidate, explains the result, and previews the top three.
-- Measures day/night room profiles using an original 4K reference pattern and room photos.
+- Estimates day/night room appearance from ordinary phone photos, automatically
+  finding the TV and nearby wall. Optional reference calibration improves confidence.
 - Reacts to supported artwork websocket events with a 10-second polling fallback.
 - Re-evaluates unchanged artwork when room profiles, settings or overrides change.
 - Offers Adaptive, Subtle, Contrast and Gallery strategies, neutral bias, hysteresis,
@@ -61,14 +62,34 @@ health, not TV availability; a sleeping TV is not a container failure.
 3. **Capabilities.** Read model/API, Art Mode state, current artwork and advertised
    mattes. While Art Mode is on, Re-evaluate attempts thumbnail acquisition.
    Diagnostics distinguishes observed events and unverified physical behavior.
-4. **Calibrate the room.** Use guided calibration below, or a quick wall color.
+4. **Snap the room.** Upload an ordinary phone photo; wall sampling is automatic.
    Night calibration can be added later. Choose a timezone and switching schedule.
 5. Check the recommendation, manually apply it, then resume automation when ready.
 
 Setup is always available at **Settings → Run setup wizard**. Changing TVs does
 not require deleting the database; automation is paused when switching devices.
 
-## Guided room calibration
+## Just snap a room photo
+
+The normal phone workflow is **take/upload a photo → automatic TV detection and
+wall sampling → saved room profile**. Include the whole TV and some surrounding
+wall from your normal viewing position. The TV can keep playing a movie; this
+workflow sends no commands to it. Take a separate photo under nighttime lighting
+later. No wall painting or tracing is required.
+
+OpenCV scores screen-shaped quadrilaterals from frame edges, then proposes wall
+samples above and beside the TV. Texture/color outliers are excluded. Review the
+result if desired; an optional overlay shows what was sampled. If the detector
+cannot confidently find the TV, tap its four corners and sampling proceeds
+automatically. Severe angles, occlusions, portrait-mounted TVs and multiple similar
+rectangles can require this fallback. This is geometry, not semantic scene understanding.
+
+Ordinary snapshots provide **as-photographed appearance**, not camera-corrected paint
+color. Exposure and white balance remain unknown; confidence is capped at 60%, and
+no ambient color-cast measurement is claimed without a reference. An advanced wall
+editor remains available only to correct mistakes. Manual HEX input is also optional.
+
+## Optional guided reference calibration
 
 Start while Art Mode is already on. The application journals the original artwork,
 uploads its own 3840×2160 reference image, and displays it with no matte when
@@ -84,7 +105,7 @@ viewing position. Use normal daytime lighting. Upload JPEG, PNG or WebP, up to
 perspective, samples known patches, fits a regularized affine color transform and
 checks held-out patch error. Screen pixels are excluded from wall measurement.
 
-Review **Edit wall mask**: green pixels are sampled, other pixels are excluded.
+Optionally review **Correct wall selection**: green pixels are sampled, other pixels are excluded.
 Paint wall areas, erase furniture/windows/plants/adjacent walls, or reset automatic
 selection. A robust color/texture filter proposes the initial mask; it is not a
 semantic wall detector. Saving the mask recalculates the profile.
@@ -93,6 +114,12 @@ Profiles store wall LAB, lightness, chroma, warmth, observed brightness, estimat
 ambient cast, surrounding/neutral palettes, contrast, variability, patch error
 and confidence. Descriptions such as “Warm · Medium-light · Low saturation” derive
 from these measurements, not an LLM's aesthetic opinion.
+
+Room decorations are analyzed separately from the wall. Their accent palette has
+a small adjustable influence (default at most ±2.5 score points); set it to zero
+to ignore seasonal decorations. Movie/art pixels are excluded. Embedded color
+profiles are converted to sRGB. See [color methodology](docs/COLOR_METHOD.md) for
+the measurement limits and scoring details.
 
 **Limits:** phone auto white balance, HDR, tone mapping and screen emission differ
 from reflected wall light. This reduces errors; it does not provide colorimeter
@@ -286,7 +313,9 @@ license available when redistributing the image. Application source is MIT.
 - Advanced automated photographic calibration of every matte is not implemented;
   editable swatches provide the v1 adjustment path.
 - This service manages one active television per data directory. Photo-based
-  calibration and uploads have mock/synthetic tests; physical end-to-end testing
+  reference calibration and uploads have mock/synthetic tests; ordinary snapshot
+  detection was also checked locally against a private room photo (not published).
+  Physical end-to-end testing
   remains required. The app has no authentication and assumes a trusted LAN.
 
 ## Privacy, security, and contributing

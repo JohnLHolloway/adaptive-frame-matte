@@ -61,7 +61,23 @@ class MatteRecommendationEngine:
                 "lightness": closeness(lab[0], target_l, 45),
                 "neutral": neutral,
             }
+            # Phone exposure/white balance is not an absolute wall-to-TV measurement.
+            reliability = min(1, max(0.2, room.get("confidence", 0.35) / 0.9))
+            for component in ("wall", "room"):
+                components[component] = 50 + reliability * (components[component] - 50)
             score = sum(components[k] * weights[k] for k in weights) / max(1, sum(weights.values()))
+            accents = room.get("accent_palette", [])
+            accent_score = 50.0
+            if accents:
+                accent_score = sum(
+                    closeness(float(delta_e(lab, p["lab"])), 12, 32) * p["percentage"] / 100
+                    for p in accents
+                )
+            influence = settings.get("accent_influence", 5)
+            if strategy in ("Gallery", "Subtle"):
+                influence *= 0.4
+            accent_adjustment = influence * reliability * (accent_score - 50) / 100
+            score += accent_adjustment
             # Small, conservative style effect. Never overwhelms a good color match.
             style = 0
             if matte["family"] == settings.get("preferred_family"):
@@ -79,10 +95,18 @@ class MatteRecommendationEngine:
                     "matte": matte,
                     "score": round(score, 2),
                     "components": {k: round(v, 1) for k, v in components.items()},
+                    "accent_score": round(accent_score, 1),
+                    "accent_adjustment": round(accent_adjustment, 2),
+                    "room_evidence_reliability": round(reliability, 2),
                     "style_adjustment": style,
                     "reasons": [
                         REASONS[k] for k in sorted(components, key=components.get, reverse=True)[:4]
-                    ],
+                    ]
+                    + (
+                        ["Small harmony benefit from surrounding room accents"]
+                        if accent_adjustment > 0.4
+                        else []
+                    ),
                 }
             )
         return sorted(result, key=lambda x: (-x["score"], x["matte"]["id"]))

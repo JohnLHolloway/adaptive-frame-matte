@@ -1,7 +1,7 @@
 from io import BytesIO
 
 import numpy as np
-from PIL import Image, ImageOps, UnidentifiedImageError
+from PIL import Image, ImageCms, ImageOps, UnidentifiedImageError
 
 from app.artwork.palette import palette, to_lab
 
@@ -21,7 +21,23 @@ def load_image(data: bytes):
         if image.width * image.height > 40_000_000:
             raise ValueError("Image exceeds 40 megapixels")
         image.load()
-        return ImageOps.exif_transpose(image).convert("RGB")
+        oriented = ImageOps.exif_transpose(image)
+        icc = image.info.get("icc_profile")
+        if icc:
+            try:
+                oriented = ImageCms.profileToProfile(
+                    oriented,
+                    ImageCms.ImageCmsProfile(BytesIO(icc)),
+                    ImageCms.createProfile("sRGB"),
+                    outputMode="RGB",
+                )
+            except (ImageCms.PyCMSError, OSError, ValueError):
+                raise ValueError(
+                    "Cannot read this photo's color profile. Export it as an sRGB JPEG."
+                ) from None
+        normalized = oriented.convert("RGB")
+        normalized.info.clear()
+        return normalized
 
 
 class ArtworkAnalyzer:
