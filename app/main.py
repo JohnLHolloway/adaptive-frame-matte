@@ -4,6 +4,7 @@ import logging
 import re
 import secrets
 from contextlib import asynccontextmanager
+from contextvars import ContextVar
 from datetime import time
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -17,13 +18,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app import __version__, config
 from app.artwork.palette import to_lab
-from app.db import Persistence
-from app.room.calibration import RoomCalibrationService
 from app.room.pattern import generate
 from app.room.profiles import quick_profile
 from app.samsung.discovery import discover, validate_ip
 from app.samsung.mock import MockFrameClient
-from app.services.watcher import AutomationWatcher
+from app.services.televisions import TelevisionManager
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 ROOT = Path(__file__).parent / "web"
@@ -56,26 +55,20 @@ def create_app(directory=None, mock=None):
     directory = Path(directory) if directory else config.DATA
     mock = config.MOCK if mock is None else mock
 
+    selected_tv = ContextVar("selected_tv", default="primary")
+
     @asynccontextmanager
     async def lifespan(app):
-        db = Persistence(directory)
-        ip = db.get("config", "tv_ip")
-        client = MockFrameClient() if mock else None
-        if ip and not mock:
-            from app.samsung.client import SamsungClient
-
-            client = SamsungClient(ip, directory / "tokens")
-        app.state.db = db
-        app.state.watcher = AutomationWatcher(db, client)
-        app.state.calibration = RoomCalibrationService(db)
+        manager = TelevisionManager(directory, mock)
+        app.state.televisions = manager
+        await manager.start()
+        primary = manager.runtimes["primary"]
+        app.state.db, app.state.watcher = primary.db, primary.watcher
         app.state.csrf = secrets.token_urlsafe(32)
-        if mock:
-            await app.state.watcher.refresh_capabilities()
-        # A configured TV uses its persisted catalog; reconnect in the watcher with backoff.
-        app.state.watcher.task = asyncio.create_task(app.state.watcher.run())
-        yield
-        await app.state.watcher.stop()
-        db.close()
+        try:
+            yield
+        finally:
+            await manager.close()
 
     app = FastAPI(
         title="Adaptive Frame Matte",
@@ -101,7 +94,14 @@ def create_app(directory=None, mock=None):
                 )
             if int(request.headers.get("content-length", "0")) > config.MAX_UPLOAD + 65536:
                 return JSONResponse({"detail": "Upload exceeds 20 MB"}, status_code=413)
-        response = await call_next(request)
+        identifier = request.headers.get("x-frame-id", request.query_params.get("tv", "primary"))
+        if identifier not in app.state.televisions.runtimes:
+            return JSONResponse({"detail": "Unknown television"}, status_code=404)
+        context = selected_tv.set(identifier)
+        try:
+            response = await call_next(request)
+        finally:
+            selected_tv.reset(context)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["X-Frame-Options"] = "DENY"
@@ -123,11 +123,14 @@ def create_app(directory=None, mock=None):
             {"detail": "Operation failed. Check TV connectivity and Diagnostics."}, status_code=503
         )
 
+    def runtime():
+        return app.state.televisions.runtimes[selected_tv.get()]
+
     def watcher():
-        return app.state.watcher
+        return runtime().watcher
 
     def db():
-        return app.state.db
+        return runtime().db
 
     def client():
         if not watcher().client:
@@ -163,8 +166,8 @@ def create_app(directory=None, mock=None):
             "capabilities": caps,
             "rooms": db().all("rooms"),
             "mattes": w.catalog.all(),
-            "artworks": db().all("artwork"),
-            "overrides": db().all("overrides"),
+            "tv_id": selected_tv.get(),
+            "televisions": app.state.televisions.list(),
             "history": db().history(),
             "mock": mock,
             "version": __version__,
@@ -183,11 +186,35 @@ def create_app(directory=None, mock=None):
         logging.getLogger(__name__).info("TV_DISCOVERED count=%d", len(results))
         return results
 
+    @app.post("/api/televisions")
+    async def add_television(request: Request):
+        identifier = await app.state.televisions.add((await request.json()).get("name"))
+        return {"id": identifier}
+
+    @app.post("/api/television/name")
+    async def rename_television(request: Request):
+        name = TelevisionManager.name((await request.json()).get("name"))
+        app.state.televisions.registry.put("televisions", selected_tv.get(), {"name": name})
+        return {"ok": True}
+
+    @app.get("/api/artworks")
+    async def artworks(q: str = "", behavior: str = "all", page: int = 1, size: int = 24):
+        if len(q) > 100 or behavior not in ("all", "automatic", "force", "never"):
+            raise ValueError("Invalid artwork filter")
+        if page < 1 or not 1 <= size <= 48:
+            raise ValueError("Invalid artwork page")
+        return db().artwork_page(q, behavior, page, size)
+
     @app.post("/api/connect")
     async def connect(request: Request):
         ip = validate_ip((await request.json()).get("ip", "")) if not mock else None
         w = watcher()
-        async with w.lock:
+        async with app.state.televisions.lock, w.lock:
+            if ip and any(
+                r.db.get("config", "tv_ip") == ip and key != selected_tv.get()
+                for key, r in app.state.televisions.runtimes.items()
+            ):
+                raise ValueError("This TV is already configured; select it from the TV menu")
             if db().get("calibration", "active"):
                 raise ValueError("Finish calibration before changing televisions")
             if w.client:
@@ -197,7 +224,7 @@ def create_app(directory=None, mock=None):
             else:
                 from app.samsung.client import SamsungClient
 
-                w.client = SamsungClient(ip, directory / "tokens")
+                w.client = SamsungClient(ip, db().directory / "tokens")
             await w.client.pair()
             old_ip = db().get("config", "tv_ip")
             if ip != old_ip:
@@ -287,7 +314,7 @@ def create_app(directory=None, mock=None):
     @app.post("/api/room/{profile}/photo")
     async def photo(profile, file: UploadFile):
         result = await asyncio.to_thread(
-            app.state.calibration.process, await image_bytes(file), profile_name(profile)
+            runtime().calibration.process, await image_bytes(file), profile_name(profile)
         )
         watcher().key = None
         return result
@@ -296,7 +323,7 @@ def create_app(directory=None, mock=None):
     async def snapshot(profile: str, file: UploadFile, corners: str | None = Form(None)):
         points = json.loads(corners) if corners else None
         result = await asyncio.to_thread(
-            app.state.calibration.snapshot, await image_bytes(file), profile_name(profile), points
+            runtime().calibration.snapshot, await image_bytes(file), profile_name(profile), points
         )
         watcher().key = None
         return result
@@ -304,14 +331,14 @@ def create_app(directory=None, mock=None):
     @app.post("/api/room/{profile}/mask")
     async def mask(profile, file: UploadFile):
         result = await asyncio.to_thread(
-            app.state.calibration.remask, profile_name(profile), await image_bytes(file)
+            runtime().calibration.remask, profile_name(profile), await image_bytes(file)
         )
         watcher().key = None
         return result
 
     @app.post("/api/room/{profile}/reset-mask")
     async def reset_mask(profile):
-        return await asyncio.to_thread(app.state.calibration.remask, profile_name(profile))
+        return await asyncio.to_thread(runtime().calibration.remask, profile_name(profile))
 
     @app.get("/calibration-pattern.png")
     async def pattern():
@@ -320,7 +347,7 @@ def create_app(directory=None, mock=None):
     @app.post("/api/calibration/{action}")
     async def calibration(action, request: Request):
         async with watcher().lock:
-            service = app.state.calibration
+            service = runtime().calibration
             if action == "start":
                 result = await service.start(client())
             elif action == "finish":
@@ -367,6 +394,33 @@ def create_app(directory=None, mock=None):
         watcher().key = None
         return {"ok": True}
 
+    @app.post("/api/mattes/bulk")
+    async def matte_group(request: Request):
+        data = await request.json()
+        field = data.get("field")
+        if field not in ("family", "color"):
+            raise ValueError("Choose a discovered style or color")
+        rows = [r for r in watcher().catalog.all() if r[field] == data.get("value")]
+        if not rows:
+            raise ValueError("Unknown matte group")
+        preference = data.get("preference", "normal")
+        if preference not in ("normal", "preferred", "avoid"):
+            raise ValueError("Invalid preference")
+        color = data.get("hex")
+        if color and (field != "color" or not re.fullmatch(r"#[0-9a-fA-F]{6}", color)):
+            raise ValueError("A measured color must use #RRGGBB")
+        for row in rows:
+            row.update(enabled=bool(data.get("enabled", True)), preference=preference)
+            if color:
+                row.update(
+                    hex=color,
+                    source="User calibrated",
+                    lab=to_lab([int(color[i : i + 2], 16) for i in (1, 3, 5)]).tolist(),
+                )
+            db().put("mattes", row["id"], row)
+        watcher().key = None
+        return {"ok": True, "updated": len(rows)}
+
     @app.post("/api/artwork/{content_id}/image")
     async def local_art(content_id, file: UploadFile):
         if content_id not in db().all("artwork"):
@@ -392,7 +446,7 @@ def create_app(directory=None, mock=None):
             or ".." in filename
         ):
             raise HTTPException(404)
-        path = directory / category / filename
+        path = db().directory / category / filename
         if not path.is_file():
             raise HTTPException(404)
         return FileResponse(path, media_type="image/png")
@@ -409,6 +463,7 @@ def create_app(directory=None, mock=None):
             "history",
             "diagnostics",
             "settings",
+            "televisions",
         ):
             raise HTTPException(404)
         return templates.TemplateResponse(

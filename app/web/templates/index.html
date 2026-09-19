@@ -3,8 +3,9 @@
 <meta name="csrf-token" content="{{ csrf }}"><title>Adaptive Frame Matte</title>
 <link rel="stylesheet" href="/static/style.css"><script src="/static/app.js" defer></script></head>
 <body data-page="{{ page }}"><aside><a class="brand" href="/">▣ <span>Adaptive<br>Frame Matte</span></a>
-<nav>{% for path, label in [('', 'Dashboard'), ('room','Room'), ('artwork','Artwork'), ('mattes','Mattes'), ('strategy','Strategy'), ('history','History'), ('diagnostics','Diagnostics'), ('settings','Settings')] %}
+<nav>{% for path, label in [('', 'Dashboard'), ('televisions', 'TVs & discovery'), ('room','Room'), ('artwork','Artwork'), ('mattes','Mattes'), ('strategy','Strategy'), ('history','History'), ('diagnostics','Diagnostics'), ('settings','Settings')] %}
 <a href="/{{path}}" {% if page == (path or 'dashboard') %}class="active"{% endif %}>{{label}}</a>{% endfor %}</nav>
 <small>LOCAL BY DESIGN<br>No cloud. No telemetry.</small></aside><main><header><div><span class="eyebrow">ART, AT HOME</span><h1>{{page|title}}</h1></div><div id="connection" class="badge">Connecting…</div></header>
+<label class="tv-picker">Selected TV<select id="tv-select" aria-label="Selected television"><option>Loading…</option></select></label>
 <div id="notice" role="status" aria-live="polite"></div><section id="content"><p>Loading your Frame…</p></section>
 <footer>Unofficial Samsung Frame companion · All visual analysis stays here.</footer></main></body></html>

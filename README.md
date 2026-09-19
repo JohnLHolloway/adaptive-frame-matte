@@ -18,6 +18,8 @@ source files are not downloaded, and no DRM or authentication is bypassed.
 ## What it does
 
 - Discovers Samsung TVs through SSDP or an explicit private subnet; pairs locally.
+- Runs multiple TVs independently with separate pairing, room profiles, settings,
+  caches, overrides and history. A per-tab TV selector keeps controls scoped.
 - Queries the device's matte families/colors, including RGB when the TV reports it.
 - Analyzes thumbnails in CIELAB with CIEDE2000 and a separate 12.5% perimeter palette.
 - Scores every enabled candidate, explains the result, and previews the top three.
@@ -139,6 +141,27 @@ Polar sunrise/sunset calculation failures fall back to the fixed schedule. If an
 active profile is missing, recommendations wait for it instead of inventing data.
 
 ## Recommendations and artwork
+
+**TVs & discovery** adds another TV or opens discovery for the selected one. Each
+configured TV has its own persistent connection and watcher; switching the UI does
+not pause other TVs. Existing single-TV installations migrate as **My Frame** without
+moving or deleting their data. Additional TVs live under `/data/tvs/<id>`. One TV
+address cannot be assigned to two controllers in the same installation. Up to 16
+TVs can be configured; only one physical TV was available for live validation.
+
+The Artwork library has server-side search, behavior filters and 24-item pages;
+it does not transfer every artwork's analysis with each dashboard refresh. Images
+load lazily. Mattes defaults to grouped **Colors**, with **Styles** and individual
+**Combinations** views, search, style filters and bounded pages. Color or style
+preferences can be changed as a group.
+
+Samsung controls which matte colors and styles the physical TV can render. An
+arbitrary HEX color or width in millimeters cannot be sent through this API. Custom
+measured color values calibrate a supported color's local appearance and scoring;
+they do not create new TV colors. Border width and built-in shadow depth are chosen
+through the supported style (thin, wide, shadowbox, etc.). Browser previews vary
+width and show shadowbox inset depth, but are schematic; exact dimensions, material,
+lighting and multi-panel layouts are not reproduced.
 
 Adaptive defaults: 30% perimeter harmony, 25% wall separation, 15% artwork palette,
 10% room harmony, 10% lightness balance, 10% restrained chroma. Advanced weights

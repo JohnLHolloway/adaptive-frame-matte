@@ -3,3 +3,11 @@
 button,.button,nav a{min-height:44px}input,select{font-size:16px}.grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr))}.card{min-width:0}form input[type=file]{width:100%}form input[type=file]::file-selector-button{min-height:40px;border:0;border-radius:5px;background:#e8ece4;padding:8px 12px;margin-right:8px;color:#254e40}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #819a69;outline-offset:3px}.mask-wrap{overscroll-behavior:contain}
 @media(max-width:600px){aside{padding:14px 16px}.brand{margin-bottom:10px}nav{gap:3px;padding-bottom:2px}nav a{display:flex;align-items:center}main{padding:22px 16px}header{flex-wrap:wrap;align-items:flex-start}.card{padding:18px}.preview{padding:24px 15px;min-height:205px}.frame{max-width:100%;padding:18px}.row{gap:10px}.steps{gap:7px}.steps span{font-size:11px;padding:8px 10px}.mask-wrap canvas{border:1px solid #cdd5ca}#save-mask,#reset-mask{width:100%}}
 .room-photo{width:100%;height:auto;max-height:420px;object-fit:contain;border-radius:7px;margin-top:15px;background:#eeede7}details.card>summary{font-size:16px;font-weight:500}details.card[open]>summary{margin-bottom:20px}
+.tv-picker{max-width:360px;margin:0 0 24px}.tv-picker select{width:100%}
+.frame[data-family]{padding:22px}.frame[data-family="none"]{padding:0}
+.frame[data-family="modernthin"]{padding:7px}.frame[data-family="modernwide"]{padding:36px}
+.frame[data-family="shadowbox"]{padding:27px}.frame[data-family="flexible"]{padding:18px}
+.matte-window{position:relative;line-height:0}.matte-window img{width:100%;height:auto}
+.frame[data-family="shadowbox"] .matte-window:after{content:"";position:absolute;inset:0;box-shadow:inset 5px 7px 10px #0007,inset -2px -2px 4px #0003;pointer-events:none}
+.frame[data-family="modern"] .matte-window,.frame[data-family="modernthin"] .matte-window,.frame[data-family="modernwide"] .matte-window{outline:1px solid #0002}
+.preview.small .frame[data-family="modernthin"]{padding:5px}.preview.small .frame[data-family="modernwide"]{padding:22px}.preview.small .frame[data-family="shadowbox"]{padding:18px}.preview.small .frame[data-family="modern"]{padding:14px}

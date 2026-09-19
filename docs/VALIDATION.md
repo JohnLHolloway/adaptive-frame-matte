@@ -5,7 +5,11 @@ not a compatibility promise for every Samsung TV or firmware.
 
 ## Automated and browser checks
 
-- 70 pytest tests pass on Python 3.13 (Windows development environment).
+- 75 pytest tests pass on Python 3.13 (Windows development environment).
+- Multi-TV tests cover isolated settings/profiles/overrides/media, migration of
+  existing data, restart persistence, and a 300-artwork paginated/filtered library.
+- Mobile browser checks exercise adding/selecting a second mock TV, grouped matte
+  views, custom appearance calibration, discovery results and artwork search.
 - Ruff checks pass; Python compilation succeeds.
 - Desktop Chromium: Dashboard, Setup, Room, Artwork, Mattes, Strategy, History,
   Diagnostics and Settings render with no JavaScript errors.
@@ -62,7 +66,13 @@ Remaining unverified checks:
 - Real room photographs containing the displayed reference pattern; ordinary snapshot
   calibration was tested using the privately supplied room photo.
 - Overnight/long-duration unattended operation on the physical television.
-- Installation on a user's TrueNAS host (local Docker testing is not a NAS deployment).
+- A second physical TV (multi-TV behavior is covered using independent mocks).
+
+TrueNAS SCALE deployment was subsequently tested: image built on the NAS, private
+data migrated, web health/mobile layout passed, and pairing succeeded from the NAS.
+The stored token then worked under ordinary bridge networking. After container
+restart, the app reconnected and retrieved the Art Store thumbnail and recommendations.
+Discovery using a private /24 Samsung-port-only scan also found the actual Frame.
 
 Run `scripts/frame_probe.py` as documented in the README before enabling automation
 on a new physical installation. No live TV tests run in GitHub Actions.

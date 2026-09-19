@@ -66,5 +66,35 @@ class Persistence:
                 )
             ]
 
+    def artwork_page(self, query, behavior, page, size):
+        # Filter/count in SQLite; dashboard payloads never contain the full library.
+        join = "FROM records a LEFT JOIN records o ON o.category='overrides' AND o.key=a.key "
+        where = "WHERE a.category='artwork' AND instr(lower(a.key), lower(?)) > 0 "
+        params = [query]
+        if behavior != "all":
+            where += "AND coalesce(json_extract(o.value, '$.mode'),'automatic')=? "
+            params.append(behavior)
+        with self.lock:
+            total = self.connection.execute("SELECT count(*) " + join + where, params).fetchone()[0]
+            pages = max(1, (total + size - 1) // size)
+            page = min(page, pages)
+            rows = self.connection.execute(
+                "SELECT a.value,o.value "
+                + join
+                + where
+                + "ORDER BY json_extract(a.value,'$.last_seen') DESC,a.key LIMIT ? OFFSET ?",
+                [*params, size, (page - 1) * size],
+            ).fetchall()
+        return {
+            "items": [
+                {**json.loads(a), "override": json.loads(o) if o else {"mode": "automatic"}}
+                for a, o in rows
+            ],
+            "total": total,
+            "page": page,
+            "pages": pages,
+            "size": size,
+        }
+
     def close(self):
         self.connection.close()
