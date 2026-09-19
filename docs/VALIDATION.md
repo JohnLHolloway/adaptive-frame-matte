@@ -5,7 +5,7 @@ not a compatibility promise for every Samsung TV or firmware.
 
 ## Automated and browser checks
 
-- 68 pytest tests pass on Python 3.13 (Windows development environment).
+- 70 pytest tests pass on Python 3.13 (Windows development environment).
 - Ruff checks pass; Python compilation succeeds.
 - Desktop Chromium: Dashboard, Setup, Room, Artwork, Mattes, Strategy, History,
   Diagnostics and Settings render with no JavaScript errors.

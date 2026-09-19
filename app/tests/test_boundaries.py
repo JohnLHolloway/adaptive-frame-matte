@@ -1,5 +1,5 @@
 import json
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
@@ -9,6 +9,35 @@ from app.db import Persistence
 from app.room.calibration import RoomCalibrationService
 from app.samsung.client import SamsungClient
 from app.samsung.mock import MockFrameClient, sample
+
+
+async def test_pair_obtains_remote_token_without_sending_commands(tmp_path, monkeypatch):
+    remote = MagicMock()
+    remote.open = AsyncMock()
+    remote.close = AsyncMock()
+    factory = MagicMock(return_value=remote)
+    monkeypatch.setattr("app.samsung.client.SamsungTVWSAsyncRemote", factory)
+    c = SamsungClient("192.168.1.50", tmp_path)
+    c.connect = AsyncMock()
+    await c.pair()
+    remote.open.assert_awaited_once()
+    remote.close.assert_awaited_once()
+    remote.send_command.assert_not_called()
+    c.connect.assert_awaited_once()
+
+
+async def test_pair_failure_closes_remote_and_does_not_enter_art(tmp_path, monkeypatch):
+    remote = MagicMock()
+    remote.open = AsyncMock(side_effect=TimeoutError)
+    remote.close = AsyncMock()
+    monkeypatch.setattr("app.samsung.client.SamsungTVWSAsyncRemote", lambda *a, **kw: remote)
+    c = SamsungClient("192.168.1.50", tmp_path)
+    c.connect = AsyncMock()
+    with pytest.raises(TimeoutError):
+        await c.pair()
+    remote.close.assert_awaited_once()
+    remote.send_command.assert_not_called()
+    c.connect.assert_not_called()
 
 
 async def test_device_info_falls_back_to_same_tv_tls(monkeypatch):

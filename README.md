@@ -186,6 +186,11 @@ is not currently a recommendation feature.
 
 The first live deployment step is this acceptance probe, with automation paused:
 
+Pairing is performed through Samsung's local authorization channel without sending
+remote keys. Moving to another host may require a fresh authorization even when the
+previous token was migrated. Use **Setup → Connect to this Frame** and press Allow
+on the television when prompted; tokens are stored locally and never shown in the UI.
+
 ```sh
 # Native installation
 python scripts/frame_probe.py --discover

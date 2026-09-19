@@ -11,6 +11,7 @@ import uuid
 from pathlib import Path
 
 from samsungtvws.async_art import SamsungTVAsyncArt
+from samsungtvws.async_remote import SamsungTVWSAsyncRemote
 
 from app.samsung.discovery import device_info, validate_ip
 
@@ -69,6 +70,20 @@ class SamsungClient:
             self.token_file.chmod(0o600)
 
     async def pair(self):
+        # First-time/new-host authorization is issued on Samsung's remote channel.
+        # Only open the channel to obtain a token: never send keys or other commands.
+        remote = SamsungTVWSAsyncRemote(
+            self.ip,
+            port=8002,
+            token_file=str(self.token_file),
+            timeout=15,
+            name="Adaptive Frame Matte",
+        )
+        try:
+            await asyncio.wait_for(remote.open(), 60)
+        finally:
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(remote.close(), 5)
         await self.connect()
 
     async def close(self):
