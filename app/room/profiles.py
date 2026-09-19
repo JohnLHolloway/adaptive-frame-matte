@@ -1,4 +1,4 @@
-from datetime import datetime, time
+from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 import numpy as np
@@ -41,12 +41,17 @@ class RoomProfileManager:
         local = instant.astimezone(zone) if instant else datetime.now(zone)
         if settings["schedule"] == "sun" and settings.get("latitude") is not None:
             try:
+                # Shift the observation instead of just today's boundaries: this also
+                # handles offsets that move sunrise/sunset across midnight and DST.
+                solar_local = (
+                    local.astimezone(UTC) - timedelta(minutes=settings.get("sun_offset_minutes", 0))
+                ).astimezone(zone)
                 times = sun(
                     Observer(settings["latitude"], settings["longitude"]),
-                    date=local.date(),
+                    date=solar_local.date(),
                     tzinfo=zone,
                 )
-                return "day" if times["sunrise"] <= local < times["sunset"] else "night"
+                return "day" if times["sunrise"] <= solar_local < times["sunset"] else "night"
             except ValueError:
                 pass  # Polar-day/night calculation failure: documented fixed schedule fallback.
         start, end = (

@@ -15,6 +15,7 @@ DEFAULTS = {
     "weights": {"edge": 30, "wall": 25, "palette": 15, "room": 10, "lightness": 10, "neutral": 10},
     "profile_mode": "auto",
     "schedule": "fixed",
+    "sun_offset_minutes": 0,
     "day_start": "07:00",
     "night_start": "19:00",
     "timezone": "UTC",

@@ -39,6 +39,7 @@ class SettingsUpdate(BaseModel):
     weights: dict[str, float] | None = None
     profile_mode: str | None = None
     schedule: str | None = None
+    sun_offset_minutes: int | None = Field(None, ge=-360, le=360)
     day_start: str | None = None
     night_start: str | None = None
     timezone: str | None = None

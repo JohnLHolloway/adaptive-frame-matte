@@ -371,3 +371,5 @@ errors, never tokens, MAC addresses, private device names, room photographs or r
 databases. Add focused tests for behavior changes, run Ruff/pytest and the privacy
 audit, and document which checks were mock versus physical. CI builds the container
 after tests; it never contacts your television. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+Sunrise/sunset switching supports one shared offset from -360 to +360 minutes. For example, +30 starts Day 30 minutes after sunrise and Night 30 minutes after sunset; negative values switch earlier. Configure approximate coordinates and timezone under Room or Settings. Calculations stay local; the fixed schedule is the fallback when solar events cannot be calculated.
