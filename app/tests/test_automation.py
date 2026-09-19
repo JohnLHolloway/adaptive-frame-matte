@@ -1,5 +1,6 @@
 import copy
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -73,6 +74,25 @@ async def test_no_repeated_writes(system):
     for _ in range(3):
         await w.tick()
     assert len(c.writes) == count
+
+
+async def test_transient_thumbnail_failure_retries_without_poll_hammering(system, monkeypatch):
+    db, c, w = system
+    clock = [1000.0]
+    monkeypatch.setattr("app.services.watcher.time.monotonic", lambda: clock[0])
+    acquire = w.provider.acquire
+    w.provider.acquire = AsyncMock(return_value=None)
+    await w.tick()
+    assert not w.state["recommendations"]
+    clock[0] += 10
+    await w.tick()
+    assert w.provider.acquire.await_count == 1
+    w.provider.acquire = AsyncMock(side_effect=acquire)
+    clock[0] += 51
+    await w.tick()
+    assert w.state["recommendations"]
+    await w.tick()
+    assert w.provider.acquire.await_count == 1
 
 
 async def test_hysteresis(system):

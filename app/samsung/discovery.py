@@ -24,10 +24,20 @@ def validate_ip(value):
 
 async def device_info(ip):
     ip = validate_ip(ip)
-    async with httpx.AsyncClient(timeout=3, trust_env=False, follow_redirects=False) as client:
-        response = await client.get(f"http://{ip}:8001/api/v2/")
-        response.raise_for_status()
-        d = response.json().get("device", {})
+    # Some firmware intermittently stops answering HTTP while its TLS Art socket works.
+    # Both endpoints are fixed to the validated TV; Samsung uses a self-signed certificate.
+    async with httpx.AsyncClient(
+        timeout=5, trust_env=False, follow_redirects=False, verify=False
+    ) as client:
+        for scheme, port in (("http", 8001), ("https", 8002)):
+            try:
+                response = await client.get(f"{scheme}://{ip}:{port}/api/v2/")
+                response.raise_for_status()
+                d = response.json().get("device", {})
+                break
+            except (httpx.HTTPError, ValueError):
+                if scheme == "https":
+                    raise
     return {
         "ip": ip,
         "model": d.get("modelName", "Unknown"),

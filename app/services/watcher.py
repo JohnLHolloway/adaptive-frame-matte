@@ -29,6 +29,7 @@ class AutomationWatcher:
         self.last_write = 0
         self.last_written_content = None
         self.deferred_until = 0
+        self.thumbnail_retry_at = 0
         saved_change = db.get("runtime", "last_change")
         if saved_change:
             elapsed = max(
@@ -95,6 +96,7 @@ class AutomationWatcher:
                 room = self.db.get("rooms", profile)
                 self.state.update(current=current, profile=profile, room=room)
                 if cid != old_cid:
+                    self.thumbnail_retry_at = 0
                     self.state["last_artwork_change"] = now()
                     log.info("ARTWORK_CHANGED")
                 override = self.db.get("overrides", cid, {"mode": "automatic"})
@@ -102,9 +104,13 @@ class AutomationWatcher:
                     [cid, profile, room, self.settings, self.catalog.all(), override],
                     sort_keys=True,
                 )
+                retry_thumbnail = bool(
+                    self.thumbnail_retry_at and time.monotonic() >= self.thumbnail_retry_at
+                )
                 if (
                     not force
                     and not apply
+                    and not retry_thumbnail
                     and key == self.key
                     and (not self.deferred_until or time.monotonic() < self.deferred_until)
                 ):
@@ -119,6 +125,9 @@ class AutomationWatcher:
                     obtained = await self.provider.acquire(self.client, cid)
                     if obtained:
                         art.update(obtained)
+                    self.thumbnail_retry_at = (
+                        time.monotonic() + 60 if not art.get("analysis") else 0
+                    )
                     caps = self.db.get("config", "capabilities", {})
                     caps["thumbnail"] = bool(obtained and obtained.get("image_source") == "tv")
                     if cid.startswith("SAM-"):

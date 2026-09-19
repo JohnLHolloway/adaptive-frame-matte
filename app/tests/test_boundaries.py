@@ -1,6 +1,7 @@
 import json
 from unittest.mock import AsyncMock
 
+import httpx
 import pytest
 
 from app.artwork.providers import ArtworkImageProvider
@@ -8,6 +9,34 @@ from app.db import Persistence
 from app.room.calibration import RoomCalibrationService
 from app.samsung.client import SamsungClient
 from app.samsung.mock import MockFrameClient, sample
+
+
+async def test_device_info_falls_back_to_same_tv_tls(monkeypatch):
+    from app.samsung import discovery
+
+    seen = []
+
+    def respond(request):
+        seen.append(str(request.url))
+        if request.url.port == 8001:
+            raise httpx.ConnectTimeout("HTTP unavailable", request=request)
+        return httpx.Response(
+            200, json={"device": {"modelName": "Test Frame", "FrameTVSupport": "true"}}
+        )
+
+    original_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        discovery.httpx,
+        "AsyncClient",
+        lambda **kwargs: original_client(transport=httpx.MockTransport(respond), **kwargs),
+    )
+    info = await discovery.device_info("192.168.1.50")
+    assert info["model"] == "Test Frame"
+    assert info["art_supported"] is True
+    assert seen == [
+        "http://192.168.1.50:8001/api/v2/",
+        "https://192.168.1.50:8002/api/v2/",
+    ]
 
 
 async def test_adapter_never_writes_when_artmode_off(tmp_path):
@@ -27,6 +56,72 @@ async def test_adapter_refuses_stale_artwork(tmp_path):
     with pytest.raises(ValueError, match="changed"):
         await c.set_matte("MY-OLD", "modern_polar")
     c._call.assert_not_called()
+
+
+async def test_probe_restores_distinct_portrait_orientation(tmp_path):
+    c = SamsungClient("192.168.1.50", tmp_path)
+    original = {
+        "content_id": "MY_F0001",
+        "matte_id": "none",
+        "portrait_matte_id": "shadowbox_polar",
+    }
+    c.get_art_mode = AsyncMock(return_value="on")
+    c.get_current_artwork = AsyncMock(
+        side_effect=[
+            {**original, "portrait_matte_id": "none"},
+            original,
+        ]
+    )
+    c.set_matte = AsyncMock()
+    c._call = AsyncMock()
+    await c.restore_mattes(original)
+    c.set_matte.assert_awaited_once_with("MY_F0001", "none")
+    c._call.assert_awaited_once_with(
+        c.art.change_matte, "MY_F0001", "none", portrait_matte="shadowbox_polar"
+    )
+
+
+async def test_current_normalizes_matte_case_without_changing_content_id(tmp_path):
+    c = SamsungClient("192.168.1.50", tmp_path)
+    c._call = AsyncMock(
+        return_value={
+            "content_id": "SAM-EXAMPLE",
+            "matte_id": "NONE",
+            "portrait_matte_id": "SHADOWBOX_POLAR",
+        }
+    )
+    assert await c.get_current_artwork() == {
+        "content_id": "SAM-EXAMPLE",
+        "matte_id": "none",
+        "portrait_matte_id": "shadowbox_polar",
+    }
+
+
+async def test_select_waits_for_delayed_readback(tmp_path, monkeypatch):
+    c = SamsungClient("192.168.1.50", tmp_path)
+    c.get_art_mode = AsyncMock(return_value="on")
+    c._call = AsyncMock()
+    c.get_current_artwork = AsyncMock(
+        side_effect=[{"content_id": "MY-OLD"}, {"content_id": "MY-NEW"}]
+    )
+    monkeypatch.setattr("app.samsung.client.asyncio.sleep", AsyncMock())
+    await c.select_artwork("MY-NEW")
+    assert c.get_current_artwork.await_count == 2
+
+
+@pytest.mark.parametrize("identifier", ["MY-EXAMPLE", "MY_F0004", "MY_F0004.png"])
+async def test_upload_accepts_personal_id_variants(tmp_path, identifier):
+    c = SamsungClient("192.168.1.50", tmp_path)
+    c._call = AsyncMock(return_value=identifier)
+    assert await c.upload_artwork(b"test") == identifier.split(".")[0]
+
+
+@pytest.mark.parametrize("identifier", ["SAM-EXAMPLE", "../MY-example", "MY_F0004/other"])
+async def test_upload_rejects_unexpected_identifiers(tmp_path, identifier):
+    c = SamsungClient("192.168.1.50", tmp_path)
+    c._call = AsyncMock(return_value=identifier)
+    with pytest.raises(ValueError, match="personal artwork identifier"):
+        await c.upload_artwork(b"test")
 
 
 async def test_catalog_protocol_variants(tmp_path):

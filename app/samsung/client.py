@@ -5,6 +5,7 @@ import contextlib
 import hashlib
 import json
 import logging
+import re
 import ssl
 import uuid
 from pathlib import Path
@@ -101,11 +102,16 @@ class SamsungClient:
 
     async def get_current_artwork(self):
         data = await self._call(self.art.get_current)
-        return {
+        result = {
             k: data[k]
             for k in ("content_id", "matte_id", "portrait_matte_id", "content_type", "category_id")
             if k in data
         }
+        # Store content can report uppercase defaults; writes return lowercase equivalents.
+        for field in ("matte_id", "portrait_matte_id"):
+            if isinstance(result.get(field), str):
+                result[field] = result[field].lower()
+        return result
 
     async def get_current_matte(self):
         return (await self.get_current_artwork()).get("matte_id", "")
@@ -172,20 +178,51 @@ class SamsungClient:
     async def set_matte(self, content_id, matte):
         if await self.get_art_mode() != "on":
             raise ValueError("Matte changes require active Art Mode")
-        if (await self.get_current_artwork())["content_id"] != content_id:
+        current = await self.get_current_artwork()
+        if current["content_id"] != content_id:
             raise ValueError("Artwork changed; re-evaluate before applying")
+        # Some firmware couples the reported landscape and portrait matte values.
+        # Supplying the old portrait value here can cancel the requested visible change.
         await self._call(self.art.change_matte, content_id, matte)
+
+    async def restore_mattes(self, original):
+        """Restore both recorded orientations for the opt-in acceptance probe."""
+        cid = original["content_id"]
+        await self.set_matte(cid, original["matte_id"])
+        actual = await self.get_current_artwork()
+        portrait = original.get("portrait_matte_id")
+        if portrait and actual.get("portrait_matte_id") != portrait:
+            if actual["content_id"] != cid or await self.get_art_mode() != "on":
+                raise ValueError("TV state changed during restoration")
+            await self._call(
+                self.art.change_matte, cid, original["matte_id"], portrait_matte=portrait
+            )
+        actual = await self.get_current_artwork()
+        if any(
+            actual.get(k) != original.get(k)
+            for k in ("content_id", "matte_id", "portrait_matte_id")
+        ):
+            raise ValueError("TV did not confirm restoration of both matte orientations")
 
     async def select_artwork(self, content_id):
         if await self.get_art_mode() != "on":
             raise ValueError("Will not wake the TV or enter Art Mode")
         await self._call(self.art.select_image, content_id, show=True)
+        # The acknowledgement can arrive before get_current_artwork reflects selection.
+        # Wait briefly for readback rather than racing calibration cleanup/restoration.
+        for _ in range(12):
+            if (await self.get_current_artwork()).get("content_id") == content_id:
+                return
+            await asyncio.sleep(0.25)
+        raise ValueError("TV did not confirm the requested artwork selection")
 
     async def upload_artwork(self, data, matte="none"):
         result = await self._call(
             self.art.upload, data, matte=matte, portrait_matte=matte, file_type="PNG"
         )
-        if not isinstance(result, str) or not result.startswith("MY-"):
+        if not isinstance(result, str) or not re.fullmatch(
+            r"MY[-_][A-Za-z0-9_-]+(?:\.(?:png|jpg|jpeg))?", result
+        ):
             raise ValueError("TV did not return a personal artwork identifier")
         return result.rsplit(".", 1)[0]
 

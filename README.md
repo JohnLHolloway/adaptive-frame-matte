@@ -165,13 +165,23 @@ the app uses clearly labeled original nominal estimates that can be edited.
 
 ## Physical TV acceptance and discovery
 
-The initial development environment reached a real Frame and verified pairing,
-model/Art API access, current artwork/matte, and device-reported matte families and
-RGB colors. **End-to-end physical acceptance is not yet complete:** a matte command
-was acknowledged without matching readback; the original matte was subsequently
-confirmed intact. Testing was stopped when the television was needed for normal
-viewing. Art Store thumbnail transfer did not succeed during that session. Do not
-interpret the mock tests or dashboard screenshot as physical-TV verification.
+Live development testing on a 2024 Frame verified pairing, Art API access,
+current artwork/matte, the TV's matte catalog/RGB values, Art Store and personal-art
+thumbnails, local analysis, and manual/automatic matte writes by API readback.
+An independent client selection produced an `image_selected` event. Calibration
+art uploaded and selected without a matte; generated assets were positively
+identified and removed. Original artwork and both original matte values were restored.
+Physical pixel redraw/re-selection still requires a human visual observation;
+API readback does not prove it. Remote-button event testing, actual reference-pattern
+room photography, overnight unattended operation and TrueNAS installation remain
+separate checks. See [the validation record](docs/VALIDATION.md).
+
+Firmware quirks isolated in the adapter include personal IDs with `MY_` or `MY-`,
+uppercase default matte IDs, and selection acknowledgement preceding current-artwork
+readback. Some firmware couples the two reported matte orientations; sending both
+fields in a normal change can instead ignore the landscape value. The acceptance
+probe records and restores both values explicitly. Independent portrait presentation
+is not currently a recommendation feature.
 
 The first live deployment step is this acceptance probe, with automation paused:
 

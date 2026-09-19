@@ -118,7 +118,7 @@ async def probe(args):
                         raise ValueError(
                             "Artwork changed externally: will not replace user's selection"
                         )
-                    await client.set_matte(original["content_id"], original["matte_id"])
+                    await client.restore_mattes(original)
                     await client.select_artwork(original["content_id"])
                     actual = await client.get_current_artwork()
                     restored = all(
