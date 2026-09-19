@@ -172,6 +172,35 @@ class AutomationWatcher:
                     ) from None
                 return self.state
 
+    async def apply_choice(self, content_id, matte_id, remember=False):
+        """Apply an explicit choice without silently targeting a newly selected artwork."""
+        async with self.lock:
+            if not self.client or self.db.get("calibration", "active"):
+                raise ValueError("Connect the TV and finish calibration before applying")
+            if matte_id not in {m["id"] for m in self.catalog.all() if m["enabled"]}:
+                raise ValueError("Choose an enabled matte advertised by this TV")
+            if self.db.get("overrides", content_id, {}).get("mode") == "never":
+                raise ValueError("Never modify is active; change the artwork override first")
+            if await self.client.get_art_mode() != "on":
+                raise ValueError("Art Mode must be on")
+            current = await self.client.get_current_artwork()
+            if current["content_id"] != content_id:
+                raise ValueError("Artwork changed; refresh before applying")
+            self.state["profile"] = self.profiles.active(self.settings)
+            await self._maybe_apply(current, {"mode": "force", "matte": matte_id}, True)
+            actual = await self.client.get_current_artwork()
+            if actual["content_id"] != content_id or actual.get("matte_id") != matte_id:
+                raise ValueError("TV did not confirm this choice; no override saved")
+            if remember:
+                self.db.put("overrides", content_id, {"mode": "force", "matte": matte_id})
+                self.key = None
+            self.state["current"] = actual
+            self.state["message"] = (
+                "Saved for this artwork. Choose Automatic on Artwork to remove the override."
+                if remember
+                else "Matte applied. Automation remains active for future evaluations."
+            )
+
     async def _maybe_apply(self, current, override, manual):
         candidates = self.state["recommendations"]
         cid = current["content_id"]

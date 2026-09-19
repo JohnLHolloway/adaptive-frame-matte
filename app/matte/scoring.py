@@ -30,6 +30,12 @@ class MatteRecommendationEngine:
         elif strategy == "Gallery":
             weights.update(edge=15, wall=15, neutral=45, lightness=10, palette=5, room=10)
         for matte in mattes:
+            if (
+                settings.get("preferred_family_only")
+                and settings.get("preferred_family")
+                and matte["family"] != settings["preferred_family"]
+            ):
+                continue
             if not matte["enabled"] or not matte.get("supported", True):
                 continue
             lab = np.array(matte["lab"])

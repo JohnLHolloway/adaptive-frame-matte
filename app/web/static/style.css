@@ -11,3 +11,6 @@ button,.button,nav a{min-height:44px}input,select{font-size:16px}.grid{grid-temp
 .frame[data-family="shadowbox"] .matte-window:after{content:"";position:absolute;inset:0;box-shadow:inset 5px 7px 10px #0007,inset -2px -2px 4px #0003;pointer-events:none}
 .frame[data-family="modern"] .matte-window,.frame[data-family="modernthin"] .matte-window,.frame[data-family="modernwide"] .matte-window{outline:1px solid #0002}
 .preview.small .frame[data-family="modernthin"]{padding:5px}.preview.small .frame[data-family="modernwide"]{padding:22px}.preview.small .frame[data-family="shadowbox"]{padding:18px}.preview.small .frame[data-family="modern"]{padding:14px}
+
+body:not(.advanced) .advanced-only{display:none!important}.color-palette{display:grid;grid-template-columns:repeat(auto-fit,minmax(95px,1fr));gap:18px;margin-top:22px}.color-palette>div{display:flex;flex-direction:column;align-items:center;gap:8px;text-transform:capitalize}.color-palette .swatch{width:42px;height:42px;border-radius:50%;margin:0}
+select,input:not([type=checkbox]):not([type=radio]){max-width:100%;min-width:0}form,label{min-width:0}form select{width:100%}

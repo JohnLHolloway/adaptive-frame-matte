@@ -239,3 +239,47 @@ async def test_cooldown_persists_across_watcher_restart(system):
     restarted = AutomationWatcher(db, c)
     assert restarted.last_written_content == c.current
     assert restarted.last_write > 0
+
+
+async def test_explicit_alternative_and_persistent_choice(system):
+    db, c, w = system
+    await w.tick(force=True)
+    selected = w.state["recommendations"][-1]["matte"]["id"]
+    await w.apply_choice(c.current, selected, remember=True)
+    assert (await c.get_current_artwork())["matte_id"] == selected
+    assert db.get("overrides", c.current) == {"mode": "force", "matte": selected}
+    w.save_settings({"automation": True, "cooldown": 0})
+    await w.tick(force=True)
+    assert (await c.get_current_artwork())["matte_id"] == selected
+
+
+async def test_explicit_choice_guards(system):
+    db, c, w = system
+    with pytest.raises(ValueError, match="Artwork changed"):
+        await w.apply_choice("STALE", "shadowbox_black")
+    db.put("overrides", c.current, {"mode": "never"})
+    with pytest.raises(ValueError, match="Never modify"):
+        await w.apply_choice(c.current, "shadowbox_black", True)
+    assert not c.writes
+    with pytest.raises(ValueError, match="enabled matte"):
+        await w.apply_choice(c.current, "unsupported_rgb")
+
+
+async def test_choice_does_not_save_override_after_write_failure(system):
+    db, c, w = system
+    await w.tick(force=True)
+    c.set_matte = AsyncMock(side_effect=RuntimeError("unavailable"))
+    with pytest.raises(ValueError, match="did not confirm"):
+        await w.apply_choice(c.current, "shadowbox_black", True)
+    assert db.get("overrides", c.current) is None
+
+
+async def test_style_lock_and_apply_once(system):
+    db, c, w = system
+    w.save_settings({"preferred_family": "shadowbox", "preferred_family_only": True})
+    await w.tick(force=True)
+    assert w.state["recommendations"]
+    assert all(r["matte"]["family"] == "shadowbox" for r in w.state["recommendations"])
+    await w.apply_choice(c.current, "shadowbox_black")
+    assert (await c.get_current_artwork())["matte_id"] == "shadowbox_black"
+    assert db.get("overrides", c.current) is None

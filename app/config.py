@@ -19,11 +19,13 @@ DEFAULTS = {
     "day_start": "07:00",
     "night_start": "19:00",
     "timezone": "UTC",
+    "location_label": "",
     "latitude": None,
     "longitude": None,
     "fallback": "retain",
     "safe_matte": "",
     "requires_reselect": False,
     "preferred_family": "",
+    "preferred_family_only": False,
     "setup_complete": False,
 }

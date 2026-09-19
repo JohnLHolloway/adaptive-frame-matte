@@ -373,3 +373,9 @@ audit, and document which checks were mock versus physical. CI builds the contai
 after tests; it never contacts your television. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Sunrise/sunset switching supports one shared offset from -360 to +360 minutes. For example, +30 starts Day 30 minutes after sunrise and Night 30 minutes after sunset; negative values switch earlier. Configure approximate coordinates and timezone under Room or Settings. Calculations stay local; the fixed schedule is the fallback when solar events cannot be calculated.
+
+The Room and Settings pages include an offline nearby-city picker (Astral’s bundled city catalog). Selecting a city fills approximate coordinates and timezone; Save schedule enables Auto mode. No geocoding service receives searches. Smaller towns can use a nearby city or manual coordinates.
+
+Recommendations offer **Apply once** or **Always use for this artwork**. The latter saves an artwork override; return it to Automatic on the Artwork page to resume adaptive choices. Both actions recheck the current artwork and Art Mode, honor Never Modify, and verify TV readback. Under Strategy, **Only recommend this style** keeps a chosen native border style while adapting its color.
+
+The everyday interface keeps frame style, room photos and recommendations up front. Enable **Settings → Show advanced controls** for numeric scoring, custom appearance calibration, combination-level preferences and diagnostics. This display preference is remembered in the current browser; it does not change automation settings.

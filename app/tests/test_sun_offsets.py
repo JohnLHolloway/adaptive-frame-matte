@@ -79,3 +79,40 @@ def test_offset_api_validation_and_persistence(tmp_path):
         )
     with TestClient(create_app(tmp_path, mock=True)) as client:
         assert client.get("/api/state").json()["settings"]["sun_offset_minutes"] == 30
+
+
+def test_offline_location_search_and_style_validation(tmp_path):
+    with TestClient(create_app(tmp_path, mock=True)) as client:
+        assert client.get("/api/locations?q=x").json() == []
+        locations = client.get("/api/locations?q=Charlotte").json()
+        city = next(loc for loc in locations if loc["name"] == "Charlotte")
+        assert -81 < city["longitude"] < -80
+        h = headers(client)
+        assert client.post(
+            "/api/settings",
+            headers=h,
+            json={
+                "schedule": "sun",
+                "latitude": city["latitude"],
+                "longitude": city["longitude"],
+                "timezone": city["timezone"],
+                "profile_mode": "auto",
+            },
+        ).is_success
+        assert (
+            client.post(
+                "/api/settings", headers=h, json={"preferred_family_only": True}
+            ).status_code
+            == 400
+        )
+        assert client.post(
+            "/api/settings",
+            headers=h,
+            json={"preferred_family": "shadowbox", "preferred_family_only": True},
+        ).is_success
+        assert (
+            client.post(
+                "/api/settings", headers=h, json={"preferred_family": "invented"}
+            ).status_code
+            == 400
+        )

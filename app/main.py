@@ -10,6 +10,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
+from astral.geocoder import all_locations, database
 from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -43,12 +44,14 @@ class SettingsUpdate(BaseModel):
     day_start: str | None = None
     night_start: str | None = None
     timezone: str | None = None
+    location_label: str | None = Field(None, max_length=120)
     latitude: float | None = Field(None, ge=-90, le=90)
     longitude: float | None = Field(None, ge=-180, le=180)
     fallback: str | None = None
     safe_matte: str | None = None
     requires_reselect: bool | None = None
     preferred_family: str | None = None
+    preferred_family_only: bool | None = None
     setup_complete: bool | None = None
 
 
@@ -270,6 +273,36 @@ def create_app(directory=None, mock=None):
             raise ValueError("Unknown action")
         return {"ok": True, "message": w.state.get("message")}
 
+    @app.get("/api/locations")
+    async def locations(q: str = ""):
+        query = q.strip().casefold()[:100]
+        if len(query) < 2:
+            return []
+        matches = [
+            loc
+            for loc in all_locations(database())
+            if query in f"{loc.name} {loc.region}".casefold()
+        ]
+        matches.sort(key=lambda loc: (not loc.name.casefold().startswith(query), loc.name))
+        return [
+            {
+                "name": loc.name,
+                "region": loc.region,
+                "timezone": loc.timezone,
+                "latitude": round(loc.latitude, 2),
+                "longitude": round(loc.longitude, 2),
+            }
+            for loc in matches[:30]
+        ]
+
+    @app.post("/api/recommendations/apply")
+    async def apply_choice(request: Request):
+        data = await request.json()
+        await watcher().apply_choice(
+            data.get("content_id"), data.get("matte_id"), data.get("remember") is True
+        )
+        return {"ok": True}
+
     @app.post("/api/settings")
     async def settings(update: SettingsUpdate):
         values = update.model_dump(exclude_none=True)
@@ -303,6 +336,11 @@ def create_app(directory=None, mock=None):
             merged["latitude"] is None or merged["longitude"] is None
         ):
             raise ValueError("Sunrise/sunset needs approximate latitude and longitude")
+        family = merged.get("preferred_family")
+        if family and family not in {m["family"] for m in watcher().catalog.all()}:
+            raise ValueError("Choose a style advertised by this TV")
+        if merged.get("preferred_family_only") and not family:
+            raise ValueError("Choose a style before restricting automatic recommendations")
         watcher().save_settings(values)
         return {"ok": True}
 
