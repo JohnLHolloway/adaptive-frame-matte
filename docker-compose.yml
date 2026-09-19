@@ -1,0 +1,20 @@
+services:
+  adaptive-frame-matte:
+    build: .
+    image: adaptive-frame-matte:local
+    ports:
+      - "8787:8787"
+    volumes:
+      - ${FRAME_DATA_PATH:-./data}:/data
+    environment:
+      FRAME_DATA_DIR: /data
+      FRAME_MOCK_TV: ${FRAME_MOCK_TV:-false}
+    restart: unless-stopped
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
