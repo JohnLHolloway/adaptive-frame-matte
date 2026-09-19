@@ -34,7 +34,7 @@ async def probe(args):
         "sam_thumbnail": "not tested",
     }
     try:
-        await client.connect()
+        await client.pair()
         report["pairing"] = "OK"
         info = await client.get_device_info()
         report["model"] = info["model"]
