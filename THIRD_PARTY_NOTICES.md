@@ -18,7 +18,9 @@ Users may replace/relink this library. To use a modified copy, mount or install 
 into Python's site-packages, or change the dependency and rebuild the supplied
 Dockerfile. No restriction on reverse engineering for debugging library changes
 is imposed. If distributing container images, retain these notices and provide
-the exact corresponding library source with your distribution (see README).
+the exact corresponding library source with your distribution. The supplied Docker
+image includes it at `/usr/share/adaptive-frame-matte/samsungtvws-source.tar.gz`;
+retain that archive when redistributing the image.
 
 Other direct dependencies: FastAPI, Starlette, Uvicorn, Jinja2, python-multipart,
 Pillow, NumPy, scikit-image and HTTPX. These use MIT, BSD,

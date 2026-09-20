@@ -28,3 +28,27 @@ color in the preferred style (or preserves the current style where available).
 Never modify overrides and Art Mode safety checks remain in effect. It does not
 require a thumbnail. Per-artwork forced colors resume their effect when global
 fixed-color mode is switched back to automatic.
+
+## Automation and TV limits
+
+A persistent local websocket listens for artwork changes, with a 10-second polling
+fallback. The image provider tries the TV thumbnail, a local image you supplied,
+then the cache. Analysis extracts dominant and perimeter colors in CIELAB; candidate
+matte scoring uses CIEDE2000, lightness balance and a neutral bias. The catalog comes
+from the TV; no Samsung matte IDs are assumed globally.
+
+Automatic mode uses an eight-point improvement threshold and a five-minute cooldown
+for the same artwork. New artwork can be evaluated immediately. Fixed color bypasses
+score thresholds and the cooldown so explicit color changes take effect promptly;
+already-correct mattes are not rewritten. Both modes require Art Mode and recheck
+current artwork before writes. The app never wakes the TV to change a matte.
+
+If a thumbnail is unavailable, automatic visual recommendations cannot run; retain
+current matte is the default fallback. A safe matte or per-artwork override can be
+configured. Fixed color needs no thumbnail. Firmware can reject particular
+style/artwork combinations; failures are reported without silently substituting colors.
+
+Matte commands select TV-supported style/color IDs. Arbitrary RGB colors and numeric
+border widths are not exposed by this interface. Samsung renders its own shadowbox
+and border effects. Browser previews are approximate; multi-panel layouts are not
+reproduced. Advanced swatch edits change our estimated appearance, not Samsung's color.
