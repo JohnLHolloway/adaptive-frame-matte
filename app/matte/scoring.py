@@ -21,6 +21,17 @@ def closeness(value, target, spread):
 class MatteRecommendationEngine:
     def score(self, artwork, room, mattes, settings):
         result = []
+        use_room = settings.get("use_room", True)
+        if not use_room:
+            # No photographed colors, schedule, brightness or accents enter this branch.
+            room = {
+                "wall_lab": [50, 0, 0],
+                "lightness": 50,
+                "brightness": 50,
+                "warmth": 0,
+                "confidence": 0,
+                "accent_palette": [],
+            }
         strategy = settings["strategy"]
         weights = settings["weights"].copy()
         if strategy == "Subtle":
@@ -29,6 +40,8 @@ class MatteRecommendationEngine:
             weights.update(edge=25, wall=35, neutral=15, lightness=10, palette=5, room=10)
         elif strategy == "Gallery":
             weights.update(edge=15, wall=15, neutral=45, lightness=10, palette=5, room=10)
+        if not use_room:
+            weights["wall"] = weights["room"] = 0
         for matte in mattes:
             if (
                 settings.get("preferred_family_only")
@@ -52,12 +65,18 @@ class MatteRecommendationEngine:
             target_wall = 32 if strategy == "Contrast" else 12 if strategy == "Subtle" else 23
             neutral = float(np.clip(100 - chroma * 2.8 * settings["neutral_preference"], 0, 100))
             if strategy == "Gallery":
-                neutral = 0.8 * neutral + 0.2 * closeness(lab[0], 86, 35)
+                neutral = (
+                    (0.8 * neutral + 0.2 * closeness(lab[0], 86, 35))
+                    if use_room
+                    else (0.45 * neutral + 0.55 * closeness(lab[0], 90, 20))
+                )
             target_l = (
                 0.45 * artwork["edge_lightness"]
                 + 0.35 * room["lightness"]
                 + 0.20 * (82 if room["brightness"] > 50 else 48)
             )
+            if not use_room:
+                target_l = 0.65 * artwork["edge_lightness"] + 0.35 * 88
             components = {
                 "edge": closeness(edge_distance, target_edge, 35),
                 "wall": closeness(wall_distance, target_wall, 27),
@@ -79,7 +98,7 @@ class MatteRecommendationEngine:
                     closeness(float(delta_e(lab, p["lab"])), 12, 32) * p["percentage"] / 100
                     for p in accents
                 )
-            influence = settings.get("accent_influence", 5)
+            influence = settings.get("accent_influence", 5) if use_room else 0
             if strategy in ("Gallery", "Subtle"):
                 influence *= 0.4
             accent_adjustment = influence * reliability * (accent_score - 50) / 100
@@ -88,7 +107,7 @@ class MatteRecommendationEngine:
             style = 0
             if matte["family"] == settings.get("preferred_family"):
                 style += 2
-            if matte["family"] == "shadowbox" and room["brightness"] < 50:
+            if use_room and matte["family"] == "shadowbox" and room["brightness"] < 50:
                 style += 1.5
             if matte["family"].startswith("modern") and artwork["edge_structure"] > 15:
                 style += 1
@@ -106,7 +125,12 @@ class MatteRecommendationEngine:
                     "room_evidence_reliability": round(reliability, 2),
                     "style_adjustment": style,
                     "reasons": [
-                        REASONS[k] for k in sorted(components, key=components.get, reverse=True)[:4]
+                        REASONS[k]
+                        for k in sorted(
+                            (k for k in components if weights[k] > 0),
+                            key=components.get,
+                            reverse=True,
+                        )[:4]
                     ]
                     + (
                         ["Small harmony benefit from surrounding room accents"]

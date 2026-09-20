@@ -92,8 +92,10 @@ class AutomationWatcher:
                 current = await self.client.get_current_artwork()
                 cid = current["content_id"]
                 old_cid = self.state.get("current", {}).get("content_id")
-                profile = self.profiles.active(self.settings)
-                room = self.db.get("rooms", profile)
+                profile = (
+                    self.profiles.active(self.settings) if self.settings["use_room"] else "artwork"
+                )
+                room = self.db.get("rooms", profile) if self.settings["use_room"] else None
                 self.state.update(current=current, profile=profile, room=room)
                 if cid != old_cid:
                     self.thumbnail_retry_at = 0
@@ -136,7 +138,7 @@ class AutomationWatcher:
                 art.update(content_id=cid, last_seen=now(), current_matte=current.get("matte_id"))
                 self.db.put("artwork", cid, art)
                 self.state.update(artwork=art, recommendations=[], message="")
-                if art.get("analysis") and room:
+                if art.get("analysis") and (room or not self.settings["use_room"]):
                     self.state["recommendations"] = self.engine.score(
                         art["analysis"], room, self.catalog.all(), self.settings
                     )
@@ -186,7 +188,9 @@ class AutomationWatcher:
             current = await self.client.get_current_artwork()
             if current["content_id"] != content_id:
                 raise ValueError("Artwork changed; refresh before applying")
-            self.state["profile"] = self.profiles.active(self.settings)
+            self.state["profile"] = (
+                self.profiles.active(self.settings) if self.settings["use_room"] else "artwork"
+            )
             await self._maybe_apply(current, {"mode": "force", "matte": matte_id}, True)
             actual = await self.client.get_current_artwork()
             if actual["content_id"] != content_id or actual.get("matte_id") != matte_id:

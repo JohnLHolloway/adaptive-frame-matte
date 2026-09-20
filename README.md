@@ -381,3 +381,6 @@ Recommendations offer **Apply once** or **Always use for this artwork**. The lat
 The everyday interface keeps frame style, room photos and recommendations up front. Enable **Settings → Show advanced controls** for numeric scoring, custom appearance calibration, combination-level preferences and diagnostics. This display preference is remembered in the current browser; it does not change automation settings.
 
 Everyday navigation is Home, Room, Preferences, and Settings. Management pages remain available from Settings. Use a recommendation with **Use this**, then optionally **Keep for this artwork**. Home distinguishes automatic colors, saved artwork choices, paused automation, and setup that needs attention.
+
+### Artwork-only choices
+Under Preferences, Advanced controls can turn off **Also consider room photos and day/night lighting**. With room influence off, recommendations require no room calibration and ignore wall colors, room brightness, accents and day/night transitions entirely. Gallery favors light, low-chroma paper-like borders; the supported TV palette still determines the actual result. Existing installations retain their configured room-aware behavior until this option is changed. Room photos remain saved for optional later use.

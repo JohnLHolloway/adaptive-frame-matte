@@ -33,6 +33,7 @@ class SettingsUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     automation: bool | None = None
     strategy: str | None = None
+    use_room: bool | None = None
     threshold: float | None = Field(None, ge=0, le=100)
     cooldown: int | None = Field(None, ge=0, le=86400)
     neutral_preference: float | None = Field(None, ge=0, le=3)

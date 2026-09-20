@@ -7,6 +7,7 @@ MAX_UPLOAD = 20 * 1024 * 1024
 DEFAULTS = {
     "automation": False,
     "strategy": "Adaptive",
+    "use_room": True,
     "threshold": 8.0,
     "cooldown": 300,
     "poll_seconds": 10,

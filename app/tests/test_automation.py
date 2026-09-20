@@ -283,3 +283,36 @@ async def test_style_lock_and_apply_once(system):
     await w.apply_choice(c.current, "shadowbox_black")
     assert (await c.get_current_artwork())["matte_id"] == "shadowbox_black"
     assert db.get("overrides", c.current) is None
+
+
+async def test_artwork_only_ignores_room_and_profile_changes(system):
+    db, c, w = system
+    w.save_settings({"use_room": False, "strategy": "Gallery"})
+    await w.tick(force=True)
+    before = w.state["recommendations"]
+    assert before
+    assert w.state["profile"] == "artwork"
+    assert all(r["accent_adjustment"] == 0 for r in before)
+    assert all(
+        not any("room" in reason or "wall" in reason for reason in r["reasons"]) for r in before
+    )
+    db.put("rooms", "night", quick_profile("#ff0000"))
+    w.save_settings({"profile_mode": "night"})
+    await w.tick(force=True)
+    assert w.state["recommendations"] == before
+    assert not c.writes
+    # The engine must accept missing calibration and ignore even extreme room inputs.
+    art = w.state["artwork"]["analysis"]
+    assert w.engine.score(art, None, w.catalog.all(), w.settings) == w.engine.score(
+        art, quick_profile("#0000ff"), w.catalog.all(), w.settings
+    )
+
+
+async def test_artwork_only_without_calibration_and_light_gallery_neutrals(system):
+    db, c, w = system
+    db.connection.execute("DELETE FROM records WHERE category='rooms'")
+    db.connection.commit()
+    w.save_settings({"use_room": False, "strategy": "Gallery"})
+    await w.tick(force=True)
+    assert w.state["recommendations"][0]["matte"]["color"] in ("polar", "warm")
+    assert not w.state["message"]
