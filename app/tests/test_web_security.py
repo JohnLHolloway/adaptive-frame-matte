@@ -42,14 +42,6 @@ def test_web_setup_and_security(tmp_path):
             ).status_code
             == 403
         )
-        assert (
-            c.post("/api/room/day/quick", headers=headers, json={"color": "#d8c5aa"}).status_code
-            == 200
-        )
-        assert (
-            c.post("/api/settings", headers=headers, json={"profile_mode": "day"}).status_code
-            == 200
-        )
         assert c.post("/api/action/evaluate", headers=headers).status_code == 200
         state = c.get("/api/state").json()
         assert state["recommendations"]

@@ -17,18 +17,15 @@ def test_tv_settings_profiles_overrides_and_media_are_isolated(tmp_path):
         added = c.post("/api/televisions", json={"name": "Bedroom"}, headers=primary)
         second = added.json()["id"]
         other = headers(c, second)
-        c.post("/api/room/day/quick", json={"color": "#112233"}, headers=primary)
-        c.post("/api/room/day/quick", json={"color": "#aabbcc"}, headers=other)
-        c.post("/api/settings", json={"strategy": "Gallery"}, headers=other)
+        c.post("/api/settings", json={"strategy": "Contrast"}, headers=other)
         c.post("/api/action/evaluate", headers=primary)
         c.post("/api/action/evaluate", headers=other)
         a, b = (
             c.get("/api/state", headers=primary).json(),
             c.get("/api/state", headers=other).json(),
         )
-        assert a["rooms"]["day"]["wall_hex"] != b["rooms"]["day"]["wall_hex"]
-        assert a["settings"]["strategy"] == "Adaptive"
-        assert b["settings"]["strategy"] == "Gallery"
+        assert a["settings"]["strategy"] == "Gallery"
+        assert b["settings"]["strategy"] == "Contrast"
         cid = b["current"]["content_id"]
         assert c.post(
             "/api/override", json={"content_id": cid, "mode": "never"}, headers=other
@@ -40,9 +37,9 @@ def test_tv_settings_profiles_overrides_and_media_are_isolated(tmp_path):
             c.get("/api/artworks", headers=primary).json()["items"][0]["override"]["mode"]
             == "automatic"
         )
-        (tmp_path / "room" / "private.png").write_bytes(b"private-primary-image")
-        assert c.get("/media/room/private.png?tv=primary").status_code == 200
-        assert c.get(f"/media/room/private.png?tv={second}").status_code == 404
+        (tmp_path / "artwork" / "private.png").write_bytes(b"private-primary-image")
+        assert c.get("/media/artwork/private.png?tv=primary").status_code == 200
+        assert c.get(f"/media/artwork/private.png?tv={second}").status_code == 404
         assert c.get("/api/state", headers={"x-frame-id": "../"}).status_code == 404
 
 
@@ -57,11 +54,11 @@ def test_existing_single_tv_and_added_tv_survive_restart(tmp_path):
     with TestClient(create_app(tmp_path, mock=True)) as c:
         primary = c.get("/api/state").json()
         assert primary["settings"]["requires_reselect"] is True
-        assert primary["rooms"]["day"]["wall_hex"] == "#abcdef"
+        assert "rooms" not in primary
         assert len(primary["televisions"]) == 2
         secondary = c.get("/api/state", headers={"x-frame-id": added}).json()
         assert secondary["settings"]["strategy"] == "Subtle"
-        assert not secondary["rooms"]
+        assert "rooms" not in secondary
 
 
 def test_large_artwork_library_paginates_and_filters_in_database(tmp_path):

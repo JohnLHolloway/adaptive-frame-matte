@@ -6,7 +6,6 @@ import uuid
 from dataclasses import dataclass
 
 from app.db import Persistence
-from app.room.calibration import RoomCalibrationService
 from app.samsung.client import SamsungClient
 from app.samsung.mock import MockFrameClient
 from app.services.watcher import AutomationWatcher
@@ -16,7 +15,6 @@ from app.services.watcher import AutomationWatcher
 class Television:
     db: Persistence
     watcher: AutomationWatcher
-    calibration: RoomCalibrationService
 
 
 class TelevisionManager:
@@ -47,7 +45,7 @@ class TelevisionManager:
             else (SamsungClient(ip, db.directory / "tokens") if ip else None)
         )
         watcher = AutomationWatcher(db, client)
-        runtime = Television(db, watcher, RoomCalibrationService(db))
+        runtime = Television(db, watcher)
         self.runtimes[identifier] = runtime
         if self.mock:
             await watcher.refresh_capabilities()

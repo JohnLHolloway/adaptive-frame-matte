@@ -242,5 +242,5 @@ class SamsungClient:
         return result.rsplit(".", 1)[0]
 
     async def delete_owned_artwork(self, content_id):
-        # Ownership and fingerprint must be checked by calibration service first.
+        # Ownership and fingerprint must be checked by the caller first.
         await self._call(self.art.delete, content_id)

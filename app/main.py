@@ -1,26 +1,19 @@
-import asyncio
-import json
 import logging
 import re
 import secrets
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
-from datetime import time
 from pathlib import Path
 from urllib.parse import urlsplit
-from zoneinfo import ZoneInfo
 
-from astral.geocoder import all_locations, database
-from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from fastapi import FastAPI, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, Field
 
 from app import __version__, config
 from app.artwork.palette import to_lab
-from app.room.pattern import generate
-from app.room.profiles import quick_profile
 from app.samsung.discovery import discover, validate_ip
 from app.samsung.mock import MockFrameClient
 from app.services.televisions import TelevisionManager
@@ -33,21 +26,13 @@ class SettingsUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     automation: bool | None = None
     strategy: str | None = None
-    use_room: bool | None = None
+    color_mode: str | None = None
+    fixed_color: str | None = None
+    frame_finish: str | None = None
     threshold: float | None = Field(None, ge=0, le=100)
     cooldown: int | None = Field(None, ge=0, le=86400)
     neutral_preference: float | None = Field(None, ge=0, le=3)
-    accent_influence: float | None = Field(None, ge=0, le=10)
     weights: dict[str, float] | None = None
-    profile_mode: str | None = None
-    schedule: str | None = None
-    sun_offset_minutes: int | None = Field(None, ge=-360, le=360)
-    day_start: str | None = None
-    night_start: str | None = None
-    timezone: str | None = None
-    location_label: str | None = Field(None, max_length=120)
-    latitude: float | None = Field(None, ge=-90, le=90)
-    longitude: float | None = Field(None, ge=-180, le=180)
     fallback: str | None = None
     safe_matte: str | None = None
     requires_reselect: bool | None = None
@@ -142,11 +127,6 @@ def create_app(directory=None, mock=None):
             raise ValueError("Connect to a Frame in Setup first")
         return watcher().client
 
-    def profile_name(value):
-        if value not in ("day", "night"):
-            raise ValueError("Choose day or night")
-        return value
-
     async def image_bytes(file):
         data = await file.read(config.MAX_UPLOAD + 1)
         if len(data) > config.MAX_UPLOAD:
@@ -172,15 +152,12 @@ def create_app(directory=None, mock=None):
             ),
             "device": db().get("config", "device", {}),
             "capabilities": caps,
-            "rooms": db().all("rooms"),
             "mattes": w.catalog.all(),
             "tv_id": selected_tv.get(),
             "televisions": app.state.televisions.list(),
             "history": db().history(),
             "mock": mock,
             "version": __version__,
-            "calibration": db().get("calibration", "active"),
-            "owned": db().all("owned"),
         }
 
     @app.post("/api/discover")
@@ -269,35 +246,12 @@ def create_app(directory=None, mock=None):
                         "weights",
                         "neutral_preference",
                         "threshold",
-                        "accent_influence",
                     )
                 }
             )
         else:
             raise ValueError("Unknown action")
         return {"ok": True, "message": w.state.get("message")}
-
-    @app.get("/api/locations")
-    async def locations(q: str = ""):
-        query = q.strip().casefold()[:100]
-        if len(query) < 2:
-            return []
-        matches = [
-            loc
-            for loc in all_locations(database())
-            if query in f"{loc.name} {loc.region}".casefold()
-        ]
-        matches.sort(key=lambda loc: (not loc.name.casefold().startswith(query), loc.name))
-        return [
-            {
-                "name": loc.name,
-                "region": loc.region,
-                "timezone": loc.timezone,
-                "latitude": round(loc.latitude, 2),
-                "longitude": round(loc.longitude, 2),
-            }
-            for loc in matches[:30]
-        ]
 
     @app.post("/api/recommendations/apply")
     async def apply_choice(request: Request):
@@ -312,21 +266,21 @@ def create_app(directory=None, mock=None):
         values = update.model_dump(exclude_none=True)
         choices = {
             "strategy": ("Adaptive", "Subtle", "Contrast", "Gallery"),
-            "profile_mode": ("auto", "day", "night"),
-            "schedule": ("fixed", "sun"),
+            "color_mode": ("automatic", "fixed"),
+            "frame_finish": (
+                "unspecified",
+                "white",
+                "black",
+                "light_wood",
+                "dark_wood",
+                "warm_metal",
+                "cool_metal",
+            ),
             "fallback": ("retain", "safe"),
         }
         for key, options in choices.items():
             if key in values and values[key] not in options:
                 raise ValueError(f"Invalid {key}")
-        for key in ("day_start", "night_start"):
-            if key in values:
-                time.fromisoformat(values[key])
-        if "timezone" in values:
-            try:
-                ZoneInfo(values["timezone"])
-            except Exception:
-                raise ValueError("Use a valid IANA timezone, such as America/New_York") from None
         if "weights" in values:
             weights = values["weights"]
             if (
@@ -334,73 +288,25 @@ def create_app(directory=None, mock=None):
                 or any(not 0 <= v <= 100 for v in weights.values())
                 or sum(weights.values()) <= 0
             ):
-                raise ValueError("Set all six weights between 0 and 100, with a positive total")
+                raise ValueError("Set all four weights between 0 and 100, with a positive total")
         merged = {**watcher().settings, **values}
-        if merged["schedule"] == "sun" and (
-            merged["latitude"] is None or merged["longitude"] is None
-        ):
-            raise ValueError("Sunrise/sunset needs approximate latitude and longitude")
         family = merged.get("preferred_family")
         if family and family not in {m["family"] for m in watcher().catalog.all()}:
             raise ValueError("Choose a style advertised by this TV")
         if merged.get("preferred_family_only") and not family:
             raise ValueError("Choose a style before restricting automatic recommendations")
+        if merged["color_mode"] == "fixed":
+            supported = [
+                m
+                for m in watcher().catalog.all()
+                if m["enabled"] and m["color"] == merged["fixed_color"]
+            ]
+            if family:
+                supported = [m for m in supported if m["family"] == family]
+            if not supported:
+                raise ValueError("Choose an enabled color supported by the selected frame style")
         watcher().save_settings(values)
         return {"ok": True}
-
-    @app.post("/api/room/{profile}/quick")
-    async def quick(profile, request: Request):
-        db().put("rooms", profile_name(profile), quick_profile((await request.json())["color"]))
-        watcher().key = None
-        return {"ok": True}
-
-    @app.post("/api/room/{profile}/photo")
-    async def photo(profile, file: UploadFile):
-        result = await asyncio.to_thread(
-            runtime().calibration.process, await image_bytes(file), profile_name(profile)
-        )
-        watcher().key = None
-        return result
-
-    @app.post("/api/room/{profile}/snapshot")
-    async def snapshot(profile: str, file: UploadFile, corners: str | None = Form(None)):
-        points = json.loads(corners) if corners else None
-        result = await asyncio.to_thread(
-            runtime().calibration.snapshot, await image_bytes(file), profile_name(profile), points
-        )
-        watcher().key = None
-        return result
-
-    @app.post("/api/room/{profile}/mask")
-    async def mask(profile, file: UploadFile):
-        result = await asyncio.to_thread(
-            runtime().calibration.remask, profile_name(profile), await image_bytes(file)
-        )
-        watcher().key = None
-        return result
-
-    @app.post("/api/room/{profile}/reset-mask")
-    async def reset_mask(profile):
-        return await asyncio.to_thread(runtime().calibration.remask, profile_name(profile))
-
-    @app.get("/calibration-pattern.png")
-    async def pattern():
-        return Response(generate(), media_type="image/png")
-
-    @app.post("/api/calibration/{action}")
-    async def calibration(action, request: Request):
-        async with watcher().lock:
-            service = runtime().calibration
-            if action == "start":
-                result = await service.start(client())
-            elif action == "finish":
-                result = await service.finish(client())
-            elif action == "remove":
-                result = await service.remove_owned(client(), (await request.json())["content_id"])
-            else:
-                raise ValueError("Unknown calibration action")
-            watcher().key = None
-        return result or {"ok": True}
 
     @app.post("/api/override")
     async def override(request: Request):
@@ -484,7 +390,7 @@ def create_app(directory=None, mock=None):
     @app.get("/media/{category}/{filename}")
     async def media(category, filename):
         if (
-            category not in ("room", "artwork")
+            category != "artwork"
             or not re.fullmatch(r"[a-zA-Z0-9.-]+\.png", filename)
             or ".." in filename
         ):
@@ -499,7 +405,6 @@ def create_app(directory=None, mock=None):
         if page not in (
             "",
             "setup",
-            "room",
             "artwork",
             "mattes",
             "strategy",

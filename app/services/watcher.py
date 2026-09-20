@@ -11,7 +11,6 @@ from app.config import DEFAULTS
 from app.db import now
 from app.matte.catalog import MatteCatalog
 from app.matte.scoring import MatteRecommendationEngine
-from app.room.profiles import RoomProfileManager
 
 log = logging.getLogger(__name__)
 
@@ -19,11 +18,20 @@ log = logging.getLogger(__name__)
 class AutomationWatcher:
     def __init__(self, db, client=None):
         self.db, self.client = db, client
-        self.settings = {**copy.deepcopy(DEFAULTS), **db.get("config", "settings", {})}
+        saved = db.get("config", "settings", {})
+        self.settings = {
+            **copy.deepcopy(DEFAULTS),
+            **{k: v for k, v in saved.items() if k in DEFAULTS},
+        }
+        self.settings["weights"] = {
+            k: self.settings["weights"].get(k, v) for k, v in DEFAULTS["weights"].items()
+        }
+        if not sum(self.settings["weights"].values()):
+            self.settings["weights"] = copy.deepcopy(DEFAULTS["weights"])
+        self.db.put("config", "settings", self.settings)
         self.catalog = MatteCatalog(db)
         self.provider = ArtworkImageProvider(db)
         self.engine = MatteRecommendationEngine()
-        self.profiles = RoomProfileManager()
         self.lock = asyncio.Lock()
         self.key = None
         self.last_write = 0
@@ -78,7 +86,9 @@ class AutomationWatcher:
             if not self.client:
                 return self.state
             if self.db.get("calibration", "active"):
-                self.state["message"] = "Automation suspended during calibration"
+                self.state["message"] = (
+                    "Finish the pending calibration on version 0.2.x before upgrading"
+                )
                 return self.state
             try:
                 mode = await self.client.get_art_mode()
@@ -92,18 +102,20 @@ class AutomationWatcher:
                 current = await self.client.get_current_artwork()
                 cid = current["content_id"]
                 old_cid = self.state.get("current", {}).get("content_id")
-                profile = (
-                    self.profiles.active(self.settings) if self.settings["use_room"] else "artwork"
-                )
-                room = self.db.get("rooms", profile) if self.settings["use_room"] else None
-                self.state.update(current=current, profile=profile, room=room)
+                self.state.update(current=current)
                 if cid != old_cid:
                     self.thumbnail_retry_at = 0
                     self.state["last_artwork_change"] = now()
                     log.info("ARTWORK_CHANGED")
                 override = self.db.get("overrides", cid, {"mode": "automatic"})
                 key = json.dumps(
-                    [cid, profile, room, self.settings, self.catalog.all(), override],
+                    [
+                        cid,
+                        self.settings,
+                        self.catalog.all(),
+                        override,
+                        current.get("matte_id") if self.settings["color_mode"] == "fixed" else None,
+                    ],
                     sort_keys=True,
                 )
                 retry_thumbnail = bool(
@@ -118,9 +130,6 @@ class AutomationWatcher:
                 ):
                     return self.state
                 self.deferred_until = 0
-                if profile != self.state.get("evaluated_profile"):
-                    log.info("ROOM_PROFILE_CHANGED")
-                self.state["evaluated_profile"] = profile
                 self.key = key
                 art = self.db.get("artwork", cid, {})
                 if force or cid != old_cid or not art.get("analysis"):
@@ -138,18 +147,14 @@ class AutomationWatcher:
                 art.update(content_id=cid, last_seen=now(), current_matte=current.get("matte_id"))
                 self.db.put("artwork", cid, art)
                 self.state.update(artwork=art, recommendations=[], message="")
-                if art.get("analysis") and (room or not self.settings["use_room"]):
+                if art.get("analysis"):
                     self.state["recommendations"] = self.engine.score(
-                        art["analysis"], room, self.catalog.all(), self.settings
+                        art["analysis"], self.catalog.all(), self.settings
                     )
                     log.info("MATTE_RECOMMENDED")
                 elif not art.get("analysis"):
                     self.state["message"] = (
                         "Artwork image unavailable — automatic visual analysis cannot run for this artwork."
-                    )
-                else:
-                    self.state["message"] = (
-                        f"Add a {profile} room profile before visual recommendations can run."
                     )
                 art["recommendation"] = (
                     self.state["recommendations"][0] if self.state["recommendations"] else None
@@ -177,6 +182,10 @@ class AutomationWatcher:
     async def apply_choice(self, content_id, matte_id, remember=False):
         """Apply an explicit choice without silently targeting a newly selected artwork."""
         async with self.lock:
+            if self.settings["color_mode"] == "fixed":
+                raise ValueError(
+                    "Fixed color is on. Switch to Automatic in Preferences to try alternatives."
+                )
             if not self.client or self.db.get("calibration", "active"):
                 raise ValueError("Connect the TV and finish calibration before applying")
             if matte_id not in {m["id"] for m in self.catalog.all() if m["enabled"]}:
@@ -188,9 +197,6 @@ class AutomationWatcher:
             current = await self.client.get_current_artwork()
             if current["content_id"] != content_id:
                 raise ValueError("Artwork changed; refresh before applying")
-            self.state["profile"] = (
-                self.profiles.active(self.settings) if self.settings["use_room"] else "artwork"
-            )
             await self._maybe_apply(current, {"mode": "force", "matte": matte_id}, True)
             actual = await self.client.get_current_artwork()
             if actual["content_id"] != content_id or actual.get("matte_id") != matte_id:
@@ -209,7 +215,25 @@ class AutomationWatcher:
         candidates = self.state["recommendations"]
         cid = current["content_id"]
         selected = None
-        if override["mode"] == "force":
+        fixed = self.settings["color_mode"] == "fixed"
+        if fixed:
+            matches = [
+                m
+                for m in self.catalog.all()
+                if m["enabled"] and m["color"] == self.settings["fixed_color"]
+            ]
+            family = self.settings["preferred_family"]
+            if family:
+                matches = [m for m in matches if m["family"] == family]
+            if not matches:
+                self.state["message"] = (
+                    "Your fixed color is unavailable in this style. Choose another in Preferences."
+                )
+                return
+            current_family = current.get("matte_id", "").split("_", 1)[0]
+            matches.sort(key=lambda m: (m["family"] != current_family, m["id"]))
+            selected = matches[0]["id"]
+        elif override["mode"] == "force":
             selected = override.get("matte")
         elif candidates:
             selected = candidates[0]["matte"]["id"]
@@ -220,7 +244,7 @@ class AutomationWatcher:
         available = {m["id"] for m in self.catalog.all() if m["enabled"]}
         if selected not in available:
             raise ValueError("Selected matte is disabled or unavailable on this TV")
-        if not manual:
+        if not manual and not fixed:
             if (
                 cid == self.last_written_content
                 and time.monotonic() - self.last_write < self.settings["cooldown"]
@@ -260,7 +284,7 @@ class AutomationWatcher:
             self.db.history(
                 {
                     "artwork": cid,
-                    "profile": self.state["profile"],
+                    "profile": "artwork",
                     "previous": current.get("matte_id"),
                     "new": selected,
                     "score": None,
@@ -283,11 +307,13 @@ class AutomationWatcher:
         self.db.history(
             {
                 "artwork": cid,
-                "profile": self.state["profile"],
+                "profile": "artwork",
                 "previous": current.get("matte_id"),
                 "new": selected,
                 "score": entry.get("score"),
-                "reason": "; ".join(entry.get("reasons", ["User override or safe fallback"])),
+                "reason": "Fixed color selected in Preferences"
+                if fixed
+                else "; ".join(entry.get("reasons", ["User override or safe fallback"])),
                 "mode": "manual" if manual else "automatic",
                 "status": "verified",
             }

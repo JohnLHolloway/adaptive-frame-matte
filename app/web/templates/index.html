@@ -3,7 +3,7 @@
 <meta name="csrf-token" content="{{ csrf }}"><title>Adaptive Frame Matte</title>
 <link rel="stylesheet" href="/static/style.css"><script src="/static/app.js" defer></script></head>
 <body data-page="{{ page }}"><aside><a class="brand" href="/">▣ <span>Adaptive<br>Frame Matte</span></a>
-<nav>{% for path, label in [('', 'Home'), ('room','Room'), ('strategy','Preferences'), ('settings','Settings')] %}
+<nav>{% for path, label in [('', 'Home'), ('strategy','Preferences'), ('settings','Settings')] %}
 <a href="/{{path}}" {% if page == (path or 'dashboard') %}class="active"{% endif %}>{{label}}</a>{% endfor %}</nav>
 <small>LOCAL BY DESIGN<br>No cloud. No telemetry.</small></aside><main><header><div><span class="eyebrow">ART, AT HOME</span><h1>{{ {'mattes':'Frame style & colors', 'strategy':'Preferences', 'dashboard':'Home', 'televisions':'Your TVs'}.get(page, page|title) }}</h1></div><div id="connection" class="badge">Connecting…</div></header>
 <label class="tv-picker">Selected TV<select id="tv-select" aria-label="Selected television"><option>Loading…</option></select></label>

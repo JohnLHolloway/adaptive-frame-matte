@@ -9,6 +9,6 @@ must preserve state. Include tested model/API and distinguish API acknowledgemen
 API readback and visually confirmed redraw. Do not publish runtime data.
 
 Before committing: inspect `git diff --cached`, run
-`python scripts/privacy_audit.py`, and ensure `/data`, `.env`, calibration photos
+`python scripts/privacy_audit.py`, and ensure `/data`, `.env`, private images
 and tokens remain ignored. Contributions to original application code use MIT;
 do not copy incompatible third-party code or assets into the project.

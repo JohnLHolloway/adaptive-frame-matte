@@ -1,5 +1,4 @@
 import copy
-from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -9,24 +8,8 @@ from app.config import DEFAULTS
 from app.db import Persistence
 from app.matte.catalog import MatteCatalog
 from app.matte.scoring import MatteRecommendationEngine
-from app.room.calibration import RoomCalibrationService
-from app.room.profiles import RoomProfileManager, quick_profile
-from app.samsung.mock import MockFrameClient, sample
+from app.samsung.mock import sample
 from app.services.watcher import AutomationWatcher
-
-
-@pytest.fixture
-async def system(tmp_path):
-    db = Persistence(tmp_path)
-    c = MockFrameClient()
-    w = AutomationWatcher(db, c)
-    await w.refresh_capabilities()
-    db.put("rooms", "day", quick_profile("#d8c5aa"))
-    db.put("rooms", "night", quick_profile("#534238"))
-    w.save_settings({"profile_mode": "day"})
-    yield db, c, w
-    await w.stop()
-    db.close()
 
 
 async def test_mock_client(system):
@@ -44,7 +27,7 @@ async def test_scoring_strategies_and_neutral(system):
     scores = []
     for strategy in ("Adaptive", "Subtle", "Contrast", "Gallery"):
         s = {**copy.deepcopy(DEFAULTS), "strategy": strategy}
-        ranked = MatteRecommendationEngine().score(art, db.get("rooms", "day"), w.catalog.all(), s)
+        ranked = MatteRecommendationEngine().score(art, w.catalog.all(), s)
         scores.append([r["score"] for r in ranked])
         assert all(0 <= r["score"] <= 100 for r in ranked)
         assert len(ranked[0]["reasons"]) == 4
@@ -58,9 +41,7 @@ async def test_neutral_preference_penalizes_saturated(system):
     art = ArtworkAnalyzer().analyze(sample())
 
     def navy(pref):
-        ranked = w.engine.score(
-            art, db.get("rooms", "day"), w.catalog.all(), {**w.settings, "neutral_preference": pref}
-        )
+        ranked = w.engine.score(art, w.catalog.all(), {**w.settings, "neutral_preference": pref})
         return next(r["score"] for r in ranked if r["matte"]["id"] == "modern_navy")
 
     assert navy(3) < navy(0)
@@ -100,18 +81,6 @@ async def test_hysteresis(system):
     w.save_settings({"automation": True, "threshold": 100})
     await w.tick()
     assert not c.writes
-
-
-async def test_day_night_reevaluates_same_art(system):
-    db, c, w = system
-    await w.tick()
-    first = w.state["recommendations"]
-    cid = c.current
-    w.save_settings({"profile_mode": "night"})
-    await w.tick()
-    assert c.current == cid
-    assert first != w.state["recommendations"]
-    assert w.state["profile"] == "night"
 
 
 async def test_never_modify_including_manual_apply(system):
@@ -168,32 +137,6 @@ async def test_cooldown_and_new_artwork_exception(system):
     db.put("overrides", c.current, {"mode": "force", "matte": "modern_warm"})
     await w.tick()
     assert len(c.writes) == 2
-
-
-async def test_calibration_restores_and_only_deletes_owned(system):
-    db, c, w = system
-    service = RoomCalibrationService(db)
-    original = c.current
-    state = await service.start(c)
-    assert c.current != original
-    await w.tick(apply=True)
-    assert not c.writes
-    with pytest.raises(ValueError):
-        await service.remove_owned(c, "MY-DEMO-0")
-    await service.finish(c)
-    assert c.current == original
-    await service.remove_owned(c, state["content_id"])
-    assert state["content_id"] not in c.images
-
-
-def test_schedule_and_sun():
-    manager = RoomProfileManager()
-    s = {**copy.deepcopy(DEFAULTS), "timezone": "UTC"}
-    assert manager.active(s, datetime(2026, 6, 1, 12, tzinfo=UTC)) == "day"
-    assert manager.active(s, datetime(2026, 6, 1, 22, tzinfo=UTC)) == "night"
-    s.update(schedule="sun", latitude=40, longitude=0)
-    assert manager.active(s, datetime(2026, 6, 1, 12, tzinfo=UTC)) == "day"
-    assert manager.active(s, datetime(2026, 6, 1, 1, tzinfo=UTC)) == "night"
 
 
 def test_persistence_restart(tmp_path):
@@ -283,36 +226,3 @@ async def test_style_lock_and_apply_once(system):
     await w.apply_choice(c.current, "shadowbox_black")
     assert (await c.get_current_artwork())["matte_id"] == "shadowbox_black"
     assert db.get("overrides", c.current) is None
-
-
-async def test_artwork_only_ignores_room_and_profile_changes(system):
-    db, c, w = system
-    w.save_settings({"use_room": False, "strategy": "Gallery"})
-    await w.tick(force=True)
-    before = w.state["recommendations"]
-    assert before
-    assert w.state["profile"] == "artwork"
-    assert all(r["accent_adjustment"] == 0 for r in before)
-    assert all(
-        not any("room" in reason or "wall" in reason for reason in r["reasons"]) for r in before
-    )
-    db.put("rooms", "night", quick_profile("#ff0000"))
-    w.save_settings({"profile_mode": "night"})
-    await w.tick(force=True)
-    assert w.state["recommendations"] == before
-    assert not c.writes
-    # The engine must accept missing calibration and ignore even extreme room inputs.
-    art = w.state["artwork"]["analysis"]
-    assert w.engine.score(art, None, w.catalog.all(), w.settings) == w.engine.score(
-        art, quick_profile("#0000ff"), w.catalog.all(), w.settings
-    )
-
-
-async def test_artwork_only_without_calibration_and_light_gallery_neutrals(system):
-    db, c, w = system
-    db.connection.execute("DELETE FROM records WHERE category='rooms'")
-    db.connection.commit()
-    w.save_settings({"use_room": False, "strategy": "Gallery"})
-    await w.tick(force=True)
-    assert w.state["recommendations"][0]["matte"]["color"] in ("polar", "warm")
-    assert not w.state["message"]

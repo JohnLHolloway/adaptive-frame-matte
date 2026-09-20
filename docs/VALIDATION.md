@@ -1,78 +1,20 @@
-# Validation record
+# Validation
 
-Development validation, 2026-09-19. Treat these as observations of this revision,
-not a compatibility promise for every Samsung TV or firmware.
+The current suite covers RGB/LAB round trips, a published CIEDE2000 reference,
+artwork and edge palette extraction, ICC handling, strategy differences, bounded
+frame-finish influence, fixed-color behavior, pause/Never Modify/Art Mode guards,
+hysteresis, write cooldowns, artwork overrides, protocol compatibility, thumbnail
+security, large-library paging, TV isolation, restart persistence, and removal of
+legacy room HTTP endpoints without deleting private files.
 
-## Automated and browser checks
+A physical QN65LS03DAFXZA with Art API 5.0.1.0 has been used. Pairing from the server,
+Art Store SAM-* thumbnails, matte read/write, same-art reselect redraw, observed
+image_selected websocket events, and exact original matte restoration were verified.
+The user confirmed that a matte write alone did not redraw; reselecting did.
+TrueNAS bridge-network operation and Docker restarts were verified. No firmware,
+volume, account, Wi-Fi or unrelated picture settings were changed.
 
-- 75 pytest tests pass on Python 3.13 (Windows development environment).
-- Multi-TV tests cover isolated settings/profiles/overrides/media, migration of
-  existing data, restart persistence, and a 300-artwork paginated/filtered library.
-- Mobile browser checks exercise adding/selecting a second mock TV, grouped matte
-  views, custom appearance calibration, discovery results and artwork search.
-- Ruff checks pass; Python compilation succeeds.
-- Desktop Chromium: Dashboard, Setup, Room, Artwork, Mattes, Strategy, History,
-  Diagnostics and Settings render with no JavaScript errors.
-- Mobile Chromium touch contexts: all pages at widths 320, 360, 390 and 430 have
-  no document horizontal overflow. Touch wall-mask editing/saving tested at 390.
-- Guided calibration exercised through HTTP with an original synthetic photograph:
-  reference display, photograph upload, pattern detection, profile generation,
-  browser mask editing/save and original-artwork restoration in mock mode.
-- Ordinary snapshot detection checked against a private user-provided phone photo:
-  TV located, nearby wall sampled automatically, screen/curtains/mantel excluded.
-  That photograph and its measurements are not in the repository. Synthetic tests
-  cover automatic detection, sampling, confidence limits and four-corner fallback.
-- Linux Python 3.12 Docker build, non-root runtime, read-only filesystem and
-  `/healthz` healthcheck tested. Container artwork change and day/night evaluation
-  exercised in mock mode. A container restart preserves profiles, settings/history.
-- Gitleaks and the repository-specific privacy audit are run before publication.
-
-## Physical television checks
-
-LAN connectivity and an actual Frame were established. Local pairing/token
-persistence, device information, Art API version, Art Mode state, current artwork,
-current matte, matte families, color names and TV-supplied RGB were read.
-
-Testing resumed with explicit permission while Art Mode was on. Verified on a
-2024 Frame / Art API 5.0.1.0:
-
-- Art Store thumbnail retrieval, including local palette analysis (earlier transient
-  transfers had failed). Personal calibration artwork thumbnails also worked.
-- Same-family matte change and recommendation application confirmed by readback.
-- Automatic recommendation application after selecting different Art Store content.
-- `image_selected` received from an independent websocket client selection.
-- Repeated unchanged evaluations caused no further writes.
-- Day-to-night selection re-evaluated the same content. With no measured night profile,
-  the application requested one rather than fabricating a room measurement.
-- Generated calibration pattern upload, no-matte selection readback, thumbnail
-  identity check, and removal of only positively identified generated test assets.
-- Original artwork, original landscape and portrait matte values, and Art Mode state
-  restored; both tested artworks' matte values verified after restoration.
-- A subsequent human visual test confirmed the border stayed light after the black
-  matte write, then turned black after re-selecting the same artwork. The tested TV
-  requires re-selection; this was saved in its private capability profile and enabled
-  in its settings. Original antique matte was restored and artwork re-selected afterward.
-
-Live testing uncovered and fixed MY_ personal content IDs, uppercase matte defaults,
-delayed selection readback, and probe restoration of separate portrait matte values.
-The TV may couple the reported orientations during a normal matte change. A combined
-landscape/portrait request did not reliably change the landscape matte on this firmware.
-No firmware, unrelated settings or power commands were used. No user artwork was deleted.
-
-Remaining unverified checks:
-
-- Artwork-change events initiated specifically by the physical remote (an independent
-  local API client was verified).
-- Real room photographs containing the displayed reference pattern; ordinary snapshot
-  calibration was tested using the privately supplied room photo.
-- Overnight/long-duration unattended operation on the physical television.
-- A second physical TV (multi-TV behavior is covered using independent mocks).
-
-TrueNAS SCALE deployment was subsequently tested: image built on the NAS, private
-data migrated, web health/mobile layout passed, and pairing succeeded from the NAS.
-The stored token then worked under ordinary bridge networking. After container
-restart, the app reconnected and retrieved the Art Store thumbnail and recommendations.
-Discovery using a private /24 Samsung-port-only scan also found the actual Frame.
-
-Run `scripts/frame_probe.py` as documented in the README before enabling automation
-on a new physical installation. No live TV tests run in GitHub Actions.
+Only one physical TV was available; multi-TV isolation is tested using mock clients.
+Other Frame generations and a long unattended soak remain unverified. Command
+readback is distinguished from a person confirming the visual display. Live tests
+are opt-in and never run in GitHub Actions.

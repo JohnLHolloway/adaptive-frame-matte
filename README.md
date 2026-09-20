@@ -1,43 +1,15 @@
 # Adaptive Frame Matte
 
-A local, self-hosted companion that chooses a supported Samsung Frame matte to suit
-the current artwork and the measured appearance of your room, by day and by night.
-One Python application, one container, no cloud AI.
+A local companion for Samsung Frame TVs. It chooses a restrained matte for each
+painting—or keeps one color on every artwork—in your favorite border style.
+One Python app, one container, no cloud AI or room photography.
 
-![Adaptive Frame Matte dashboard, using generated demo artwork](docs/dashboard.png)
-
-Designed for phone setup and daily use: [mobile dashboard](docs/mobile.png),
-[mobile setup](docs/mobile-setup.png), and [touch wall-mask editor](docs/mobile-mask.png).
-These screenshots use generated demo artwork and a synthetic room photograph.
-
-**Unofficial project. Not affiliated with Samsung.** This uses existing local Art
-Mode interfaces, never custom firmware. Samsung firmware/API behavior can change.
-All visual analysis is local. Samsung artwork is not redistributed, Art Store
-source files are not downloaded, and no DRM or authentication is bypassed.
-
-## What it does
-
-- Discovers Samsung TVs through SSDP or an explicit private subnet; pairs locally.
-- Runs multiple TVs independently with separate pairing, room profiles, settings,
-  caches, overrides and history. A per-tab TV selector keeps controls scoped.
-- Queries the device's matte families/colors, including RGB when the TV reports it.
-- Analyzes thumbnails in CIELAB with CIEDE2000 and a separate 12.5% perimeter palette.
-- Scores every enabled candidate, explains the result, and previews the top three.
-- Estimates day/night room appearance from ordinary phone photos, automatically
-  finding the TV and nearby wall. Optional reference calibration improves confidence.
-- Reacts to supported artwork websocket events with a 10-second polling fallback.
-- Re-evaluates unchanged artwork when room profiles, settings or overrides change.
-- Offers Adaptive, Subtle, Contrast and Gallery strategies, neutral bias, hysteresis,
-  cooldowns, force-matte overrides and Never Modify.
-- Persists pairing, preferences, room calibration, cached analysis and history in SQLite.
-
-Automation starts **paused**. It only writes while Art Mode is actively displaying,
-rechecks the content ID immediately before applying, and verifies API readback.
-It never powers on the television, changes volume or normal picture settings.
+**Unofficial. Not affiliated with Samsung.** Uses Samsung's existing local Art Mode
+interface, never custom firmware. Firmware/API behavior can change. Samsung artwork
+is not redistributed, Art Store source files are not downloaded, and authentication
+or DRM is never bypassed. All visual analysis stays local.
 
 ## Quick start
-
-Requires Docker/Compose and a Samsung Frame on a reachable trusted LAN.
 
 ```sh
 git clone https://github.com/JohnLHolloway/adaptive-frame-matte.git
@@ -47,340 +19,177 @@ sudo chown 10001:10001 data
 docker compose up -d --build
 ```
 
-Open **http://YOUR_SERVER_IP:8787/setup**. On Windows Docker Desktop, create the
-directory normally; Linux ownership commands are for Linux hosts.
+Open **http://YOUR_SERVER_IP:8787**. Find your TV in Setup, or enter its local IP.
+Press **Allow** on the TV if prompted. Pairing is saved under `/data` and never
+shown in the browser. Keep the TV in Art Mode to test matte changes.
 
-The service runs as UID/GID **10001**, listens on port **8787**, drops Linux
-capabilities, writes only to `/data`, and exposes `/healthz` for its healthcheck.
-The Compose restart policy is `unless-stopped`. The healthcheck reports application
-health, not TV availability; a sleeping TV is not a container failure.
+Under **Preferences**, choose:
 
-## First-run setup
+- **Automatically for each painting**: analyze the artwork, particularly its edges.
+  Gallery defaults to light, quiet neutrals. Adaptive, Subtle, and Contrast offer
+  other balances. Advanced numerical controls are off by default.
+- **Always use one color**: choose any enabled color advertised by your TV. It is
+  applied to each artwork in your selected style, even without a usable thumbnail.
+- **Frame style**: keep a favorite style such as Shadowbox while adapting its color.
+- **Physical frame finish**: optionally select white, black, light/dark wood or
+  warm/cool metal. This broad estimate contributes at most two score points in
+  either direction, only in automatic mode. It is not a measured color calibration.
 
-1. **Find your Frame.** Try discovery, enter a private `/24` subnet if multicast
-   is blocked, or enter the TV's IPv4 address. Only Samsung service ports are used.
-2. **Pair.** Click Connect and press **Allow** on the television if prompted.
-   Tokens are saved under `/data/tokens`, never rendered in the browser or logged.
-3. **Capabilities.** Read model/API, Art Mode state, current artwork and advertised
-   mattes. While Art Mode is on, Re-evaluate attempts thumbnail acquisition.
-   Diagnostics distinguishes observed events and unverified physical behavior.
-4. **Snap the room.** Upload an ordinary phone photo; wall sampling is automatic.
-   Night calibration can be added later. Choose a timezone and switching schedule.
-5. Check the recommendation, manually apply it, then resume automation when ready.
+Resume automation on Home. Pause stops all automatic writes, including fixed color.
+No room photos, location, sunrise/sunset schedule, or day/night setup is needed.
 
-Setup is always available at **Settings → Run setup wizard**. Changing TVs does
-not require deleting the database; automation is paused when switching devices.
+## Everyday use
 
-## Just snap a room photo
+Home shows what's on the TV and why a matte is suggested. Use **Try another color**,
+then **Use this**; optionally **Keep for this artwork** to save an individual choice.
+Manage saved choices under Settings → Artwork library. Fixed-color mode overrides
+saved per-artwork colors while active; returning to Automatic restores their effect.
+**Never modify** always takes precedence, even in fixed-color mode.
 
-The normal phone workflow is **take/upload a photo → automatic TV detection and
-wall sampling → saved room profile**. Include the whole TV and some surrounding
-wall from your normal viewing position. The TV can keep playing a movie; this
-workflow sends no commands to it. Take a separate photo under nighttime lighting
-later. No wall painting or tracing is required.
+Each configured TV has independent pairing, preferences, caches, history and watcher.
+Add TVs under Settings → Your TVs & discovery. The TV selector appears when more
+than one TV is configured. Changing the viewed TV does not pause the others.
 
-OpenCV scores screen-shaped quadrilaterals from frame edges, then proposes wall
-samples above and beside the TV. Texture/color outliers are excluded. Review the
-result if desired; an optional overlay shows what was sampled. If the detector
-cannot confidently find the TV, tap its four corners and sampling proceeds
-automatically. Severe angles, occlusions, portrait-mounted TVs and multiple similar
-rectangles can require this fallback. This is geometry, not semantic scene understanding.
+## How it works
 
-Ordinary snapshots provide **as-photographed appearance**, not camera-corrected paint
-color. Exposure and white balance remain unknown; confidence is capped at 60%, and
-no ambient color-cast measurement is claimed without a reference. An advanced wall
-editor remains available only to correct mistakes. Manual HEX input is also optional.
+A persistent local websocket listens for artwork changes, with a 10-second polling
+fallback. The image provider tries the TV thumbnail, a local image you supplied,
+then the cache. Analysis extracts dominant and perimeter colors in CIELAB; candidate
+matte scoring uses CIEDE2000, lightness balance and a neutral bias. The catalog comes
+from the TV; no Samsung matte IDs are assumed globally. See [color method](docs/COLOR_METHOD.md).
 
-## Optional guided reference calibration
+Automatic mode uses an eight-point improvement threshold and a five-minute cooldown
+for the same artwork. New artwork can be evaluated immediately. Fixed color bypasses
+score thresholds and the cooldown so explicit color changes take effect promptly;
+already-correct mattes are not rewritten. Both modes require Art Mode and recheck
+current artwork before writes. The app never wakes the TV to change a matte.
 
-Start while Art Mode is already on. The application journals the original artwork,
-uploads its own 3840×2160 reference image, and displays it with no matte when
-advertised. The fallback matte is recorded. Automation pauses during calibration.
+If a thumbnail is unavailable, automatic visual recommendations cannot run; retain
+current matte is the default fallback. A safe matte or per-artwork override can be
+configured. Fixed color needs no thumbnail. Firmware can reject particular
+style/artwork combinations; failures are reported without silently substituting colors.
 
-The pattern contains four distinct ArUco fiducials, neutral grays, black/white,
-original sRGB color patches, warm/cool neutrals, saturation samples and a large
-neutral field. It is not a copied ColorChecker chart.
+Matte commands select TV-supported style/color IDs. Arbitrary RGB colors and numeric
+border widths are not exposed by this interface. Samsung renders its own shadowbox
+and border effects. Browser previews are approximate; multi-panel layouts are not
+reproduced. Advanced swatch edits change our estimated appearance, not Samsung's color.
 
-Photograph the whole television and substantial surrounding wall from your normal
-viewing position. Use normal daytime lighting. Upload JPEG, PNG or WebP, up to
-20 MB / 40 megapixels. The app strips metadata, detects screen corners, corrects
-perspective, samples known patches, fits a regularized affine color transform and
-checks held-out patch error. Screen pixels are excluded from wall measurement.
+## Docker and TrueNAS SCALE
 
-Optionally review **Correct wall selection**: green pixels are sampled, other pixels are excluded.
-Paint wall areas, erase furniture/windows/plants/adjacent walls, or reset automatic
-selection. A robust color/texture filter proposes the initial mask; it is not a
-semantic wall detector. Saving the mask recalculates the profile.
-
-Profiles store wall LAB, lightness, chroma, warmth, observed brightness, estimated
-ambient cast, surrounding/neutral palettes, contrast, variability, patch error
-and confidence. Descriptions such as “Warm · Medium-light · Low saturation” derive
-from these measurements, not an LLM's aesthetic opinion.
-
-Room decorations are analyzed separately from the wall. Their accent palette has
-a small adjustable influence (default at most ±2.5 score points); set it to zero
-to ignore seasonal decorations. Movie/art pixels are excluded. Embedded color
-profiles are converted to sRGB. See [color methodology](docs/COLOR_METHOD.md) for
-the measurement limits and scoring details.
-
-**Limits:** phone auto white balance, HDR, tone mapping and screen emission differ
-from reflected wall light. This reduces errors; it does not provide colorimeter
-accuracy or absolute lux. Confidence is a heuristic capped at 90%, not a statistical
-probability. Manual profiles have lower confidence. Manual wall masking matters.
-
-Finish calibration to restore the original artwork, provided the user has not
-selected another artwork. Removing calibration art is a separate action restricted
-to recorded, fingerprinted, application-owned assets for the same configured TV.
-No arbitrary artwork deletion API is exposed. Interrupted sessions persist and
-continue to suspend automation until finished.
-
-Repeat at night under normal room lighting. Fixed schedules, manual Day/Night
-selection and locally calculated sunrise/sunset are supported. Approximate latitude,
-longitude and timezone are optional user input; no location service is contacted.
-Polar sunrise/sunset calculation failures fall back to the fixed schedule. If an
-active profile is missing, recommendations wait for it instead of inventing data.
-
-## Recommendations and artwork
-
-**TVs & discovery** adds another TV or opens discovery for the selected one. Each
-configured TV has its own persistent connection and watcher; switching the UI does
-not pause other TVs. Existing single-TV installations migrate as **My Frame** without
-moving or deleting their data. Additional TVs live under `/data/tvs/<id>`. One TV
-address cannot be assigned to two controllers in the same installation. Up to 16
-TVs can be configured; only one physical TV was available for live validation.
-
-The Artwork library has server-side search, behavior filters and 24-item pages;
-it does not transfer every artwork's analysis with each dashboard refresh. Images
-load lazily. Mattes defaults to grouped **Colors**, with **Styles** and individual
-**Combinations** views, search, style filters and bounded pages. Color or style
-preferences can be changed as a group.
-
-Samsung controls which matte colors and styles the physical TV can render. An
-arbitrary HEX color or width in millimeters cannot be sent through this API. Custom
-measured color values calibrate a supported color's local appearance and scoring;
-they do not create new TV colors. Border width and built-in shadow depth are chosen
-through the supported style (thin, wide, shadowbox, etc.). Browser previews vary
-width and show shadowbox inset depth, but are schematic; exact dimensions, material,
-lighting and multi-panel layouts are not reproduced.
-
-Adaptive defaults: 30% perimeter harmony, 25% wall separation, 15% artwork palette,
-10% room harmony, 10% lightness balance, 10% restrained chroma. Advanced weights
-are editable for Adaptive; other strategies have deliberate presets. Color scoring
-dominates the small style adjustments. Saturated candidates incur an additional
-conservative penalty. Scores are heuristics, not scientific aesthetic judgments.
-
-The default improvement threshold is 8 points with a 300-second cooldown. A new
-artwork bypasses the time cooldown, but still respects score improvement. Identical
-artwork/profile/settings do not trigger repeated writes. Force overrides still obey
-Art Mode safety and cooldown. **Never Modify also blocks manual Apply Recommendation.**
-
-Image acquisition tries a TV thumbnail, a locally supplied reference, then cache.
-Cache keys include content ID and image fingerprint. Normal TV-provided `SAM-*`
-thumbnails may be analyzed locally when the firmware exposes them. No original
-Art Store files are requested. When thumbnails fail, retain the current matte,
-configure a supported safe default, supply your own local reference, or use an
-artwork override. A low-resolution thumbnail is sufficient.
-
-Some advertised matte family/color combinations are incompatible with particular
-artwork dimensions. Readback failures appear in History and do not count as success.
-Disable unsuitable candidates in Mattes. Device-reported RGB is preferred; otherwise
-the app uses clearly labeled original nominal estimates that can be edited.
-
-## Physical TV acceptance and discovery
-
-Live development testing on a 2024 Frame verified pairing, Art API access,
-current artwork/matte, the TV's matte catalog/RGB values, Art Store and personal-art
-thumbnails, local analysis, and manual/automatic matte writes by API readback.
-An independent client selection produced an `image_selected` event. Calibration
-art uploaded and selected without a matte; generated assets were positively
-identified and removed. Original artwork and both original matte values were restored.
-Human observation confirmed that this TV requires re-selection of the current artwork
-for the matte to visibly redraw; its device setting was saved accordingly. Other TVs
-still require their own visual test. Remote-button event testing, actual reference-pattern
-room photography, overnight unattended operation and TrueNAS installation remain
-separate checks. See [the validation record](docs/VALIDATION.md).
-
-Firmware quirks isolated in the adapter include personal IDs with `MY_` or `MY-`,
-uppercase default matte IDs, and selection acknowledgement preceding current-artwork
-readback. Some firmware couples the two reported matte orientations; sending both
-fields in a normal change can instead ignore the landscape value. The acceptance
-probe records and restores both values explicitly. Independent portrait presentation
-is not currently a recommendation feature.
-
-The first live deployment step is this acceptance probe, with automation paused:
-
-Pairing is performed through Samsung's local authorization channel without sending
-remote keys. Moving to another host may require a fresh authorization even when the
-previous token was migrated. Use **Setup → Connect to this Frame** and press Allow
-on the television when prompted; tokens are stored locally and never shown in the UI.
+Requires a Docker/Compose-capable TrueNAS SCALE release. Create a persistent dataset,
+for example `POOL/apps/adaptive-frame-matte`, using the TrueNAS UI. In its directory:
 
 ```sh
-# Native installation
+cd /mnt/POOL/apps/adaptive-frame-matte
+git clone https://github.com/JohnLHolloway/adaptive-frame-matte.git project
+mkdir -p data
+sudo chown 10001:10001 data
+cd project
+printf 'FRAME_DATA_PATH=/mnt/POOL/apps/adaptive-frame-matte/data\nFRAME_MOCK_TV=false\n' > .env
+sudo docker compose up -d --build
+```
+
+Open **http://YOUR_SERVER_IP:8787**. The container runs as UID/GID 10001, exposes
+port 8787, logs to stdout, has a healthcheck, and restarts unless stopped. `/data`
+contains SQLite, tokens, thumbnails, history, and preferences. Back up that directory
+or its ZFS dataset. Keep it outside the repository checkout.
+
+Update without losing pairing or preferences:
+
+```sh
+git pull --ff-only
+sudo docker compose up -d --build --force-recreate
+sudo docker compose logs --tail=100
+```
+
+This is ordinary Compose deployment; it does not automatically register a TrueNAS
+Apps UI entry. The provided container has no need for host privileges.
+
+## Network requirements and discovery
+
+Bridge networking works with a manual TV IP. Your server must reach the TV's local
+Samsung endpoints (usually HTTP 8001 and TLS websocket 8002). Thumbnail transfer uses
+a TV-advertised local port. Reserve the TV's address in DHCP if possible.
+
+SSDP multicast may not cross Docker or VLAN boundaries. Setup supports an optional
+explicit private `/24` Samsung-only discovery pass; it does not aggressively scan
+unrelated services. For multicast discovery, Linux host networking can be used by
+removing the Compose `ports` section and adding `network_mode: host`. It is optional.
+
+Discovery/debug command:
+
+```sh
 python scripts/frame_probe.py --discover
-python scripts/frame_probe.py --discover --subnet YOUR_PRIVATE_SUBNET/24
-python scripts/frame_probe.py --ip YOUR_TV_IP --data-dir ./data
-# Only while Art Mode is displayed; asks for physical redraw observations.
-python scripts/frame_probe.py --ip YOUR_TV_IP --data-dir ./data --write-test --observe-seconds 30
-
-# Or use the running container (persistent token and reports under /data):
-docker compose exec adaptive-frame-matte python scripts/frame_probe.py --ip YOUR_TV_IP --write-test
+python scripts/frame_probe.py --help
 ```
 
-The write probe journals original content/matte/state, uses an advertised same-family
-alternative, reads back, asks whether the screen redrew, optionally reselects, then
-restores in `finally` and verifies both matte fields. Do not exit the probe or change
-TV modes mid-test. If the mode/content changes externally, it refuses to wake the TV
-or override the user's selection; its private recovery report identifies unfinished
-restoration. No software can guarantee restoration after power/network failure.
+## Compatibility and safe live tests
 
-Enable **Settings → Re-select current artwork after matte changes** only after
-physical observation confirms that it is required. An API readback cannot establish
-whether physical pixels redrew. For event testing, change artwork with the remote
-during the observation period. Diagnostics lists events actually observed.
+The adapter uses NickWaterton's maintained Frame-focused `samsungtvws` fork at a
+pinned commit. Different Frame generations expose different options. A production
+QN65LS03DAFXZA with Art API 5.0.1.0 has been tested: Art Store thumbnails, native
+matte writes, websocket image events and restoration worked. This model required
+reselecting the current artwork for a visible matte redraw; the app supports that
+quirk and never performs the reselect outside Art Mode. Other models remain unverified.
 
-## Network requirements
+The opt-in `scripts/frame_probe.py` supports discovery, pairing, capabilities, and
+state-preserving matte tests. Run `--help` before using its write-test options. It
+records original state and restores it; visual redraw confirmation still needs a
+person looking at the TV. Physical tests never run in GitHub Actions.
 
-The container needs access to TV TCP 8001 (device information), TCP 8002 (paired
-secure websocket), and the TV-negotiated D2D transfer port for thumbnails/uploads.
-The adapter validates the transfer host against the selected TV and bounds transfer
-sizes/time. Samsung uses a self-signed local TLS certificate.
+## Troubleshooting
 
-Normal Docker bridge networking works for manual IP connectivity. SSDP multicast
-UDP 1900 may not cross Docker/network boundaries. On a Linux host, optionally use:
+- **Not found**: enter the TV address manually; check VLAN/firewall and discovery notes.
+- **Pairing timed out**: approve the popup on the TV and retry Setup. A token authorized
+  from a different host may require pairing again from the deployment server.
+- **Matte stored but not visible**: enable re-selection in Advanced settings only after
+  verifying that the model needs it. Never use power cycling as a redraw workaround.
+- **No changes**: check Pause, Art Mode, Never modify overrides and the improvement
+  threshold. Fixed color is selected in Preferences, not through an artwork override.
+- **Unavailable color/style**: enable the desired color in the catalog or choose a
+  combination supported by that artwork. The app does not invent missing TV options.
+- **Colors look different**: TV brightness, panel rendering and browser displays differ.
+  TV-provided RGB is an estimate of appearance, not a physical measurement.
 
-```sh
-docker compose -f compose.host.yml up -d --build
-```
+## Upgrade from 0.2.x
 
-Host networking is not mandatory. Do not run both Compose variants simultaneously.
-Guest Wi-Fi isolation, VLAN rules and sleeping TVs can prevent discovery. mDNS is
-not required because Samsung's local service is discoverable by SSDP/IP.
-
-## TrueNAS SCALE
-
-Use a Docker-based SCALE release with Compose available. Do not install Python or
-modify the TrueNAS base OS. Create dedicated datasets for the checkout and app data;
-replace `POOL` below with your actual pool name. The data dataset must allow UID/GID
-10001 to traverse and write (adjust dataset ACLs in TrueNAS if required).
-
-```sh
-sudo mkdir -p /mnt/POOL/apps/adaptive-frame-matte /mnt/POOL/appdata/adaptive-frame-matte
-sudo chown 10001:10001 /mnt/POOL/appdata/adaptive-frame-matte
-sudo chmod 700 /mnt/POOL/appdata/adaptive-frame-matte
-cd /mnt/POOL/apps/adaptive-frame-matte
-sudo git clone https://github.com/JohnLHolloway/adaptive-frame-matte.git .
-printf 'FRAME_DATA_PATH=/mnt/POOL/appdata/adaptive-frame-matte\nFRAME_MOCK_TV=false\n' | sudo tee .env >/dev/null
-sudo docker compose up -d --build
-sudo docker compose ps
-```
-
-Open **http://YOUR_SERVER_IP:8787**. Pair from Setup; choose a timezone in Room.
-The entire persistent state lives in `/mnt/POOL/appdata/adaptive-frame-matte`.
-Use ZFS snapshots/backups of that dataset. For a portable SQLite backup, stop the
-container before copying the whole data directory (including WAL files).
-
-For Apps UI management, TrueNAS supports **Install via YAML** and external Compose
-`include`. After creating the checkout and `.env`, use an absolute include path in
-the Apps editor, then let Apps manage the service instead of starting a duplicate
-shell-managed stack. See [TrueNAS custom app documentation](https://apps.truenas.com/managing-apps/installing-custom-apps/).
-
-```yaml
-include:
-  - path: /mnt/POOL/apps/adaptive-frame-matte/docker-compose.yml
-    env_file: /mnt/POOL/apps/adaptive-frame-matte/.env
-```
-
-Update a shell-managed installation without deleting data:
-
-```sh
-cd /mnt/POOL/apps/adaptive-frame-matte
-sudo git pull --ff-only
-sudo docker compose up -d --build
-```
-
-Do not run `down -v` or delete the data dataset during upgrades. The database is
-schema-versioned. Future incompatible schema changes will require explicit migration.
+Version 0.3 removes room photography, calibration, geographic location, and day/night
+scheduling, including their HTTP routes. Existing pairing, matte preferences, artwork
+history and overrides remain. Obsolete settings are removed from active configuration.
+Old room files and database records are left untouched for backup/recovery, but the
+app does not read, serve or use them. They are not required for a new installation.
+Finish any active legacy calibration session on 0.2.x before upgrading; an unfinished
+session remains a safety stop rather than silently changing the displayed artwork.
 
 ## Development and mock mode
+
+Python 3.12+:
 
 ```sh
 python -m venv .venv
 . .venv/bin/activate
 pip install -e '.[dev]'
-FRAME_DATA_DIR=./data FRAME_MOCK_TV=true uvicorn app.main:app --port 8787
+FRAME_MOCK_TV=true FRAME_DATA_DIR=./data uvicorn app.main:app --port 8787
 ruff check .
 pytest
-docker build -t adaptive-frame-matte:local .
 ```
 
-PowerShell: set `$env:FRAME_DATA_DIR='./data'` and `$env:FRAME_MOCK_TV='true'`, then
-run Uvicorn. Mock mode has original generated landscapes, a synthetic `SAM-DEMO`
-thumbnail, matte changes and artwork events. Use the dashboard to change demo art
-and Day/Night buttons to simulate profile transitions. Tests exercise a redraw quirk.
-No physical integration test runs in CI; the `live` marker is excluded by default.
+On Windows, activate `.venv\Scripts\Activate.ps1` and set variables with `$env:`.
+Mock mode provides generated artwork, simulated events and a device catalog, without
+connecting to a physical TV. CI runs lint, unit/integration tests, privacy checks and
+a Docker build. Tests cover perceptual color math, image analysis, fixed-color rules,
+overrides, write guards, multi-TV isolation and migration.
 
-The Samsung adapter is the only module importing samsungtvws. The selected
-[Frame-focused async fork](https://github.com/NickWaterton/samsung-tv-ws-api) provides
-persistent event dispatch; the maintained [upstream](https://github.com/xchwarze/samsung-tv-ws-api)
-and [contemporary HA integration](https://github.com/billyfw/frame-art-shuffler) were
-evaluated during development. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+## Privacy, security, licensing and contributing
 
-The container includes the exact unmodified LGPL library source at
-`/usr/share/adaptive-frame-matte/samsungtvws-source.tar.gz`. Keep that source and its
-license available when redistributing the image. Application source is MIT.
+No telemetry, analytics, cloud AI or Samsung account password. Pairing tokens and
+images stay in `/data`; never commit or publish that directory or `.env`. Image types,
+size, filenames and network inputs are validated. **Do not expose this UI directly
+to the public internet**: it is intended for a trusted LAN, with no user login system.
 
-## Troubleshooting and limitations
-
-- **Disconnected:** verify the selected IP, local routing, TV authorization, and
-  Samsung network settings. Re-run Setup. Reconnect uses bounded backoff.
-- **Art Mode off:** expected during normal TV use; no writes occur. Never turn on
-  the TV merely to satisfy the watcher.
-- **Thumbnail unavailable:** firmware/Art Store restrictions or D2D connectivity
-  can prevent retrieval. Configure the explicit fallback; do not bypass restrictions.
-- **Write not verified:** the family may not support that artwork, or firmware may
-  require re-selection. Check with the opt-in physical probe, then configure the quirk.
-- **Photo markers missing:** include all four corners, avoid glare, fill more of
-  the camera frame with the TV, and display the reference image without cropping.
-- **Implausible wall measurement:** correct the mask, avoid clipped exposures,
-  repeat under normal lighting, or use a manual profile. Confidence is approximate.
-- **No matte options:** refresh capabilities. The application does not invent a
-  Samsung matte list if the device query fails.
-- **Events absent:** polling remains available. Older Art APIs and all Frame
-  generations are not yet physically verified. No SmartThings dependency is used.
-- **Ambient sensor:** no reliable measured local lux reading was established;
-  brightness-setting APIs are not treated as ambient sensor measurements.
-- Advanced automated photographic calibration of every matte is not implemented;
-  editable swatches provide the v1 adjustment path.
-- This service manages one active television per data directory. Photo-based
-  reference calibration and uploads have mock/synthetic tests; ordinary snapshot
-  detection was also checked locally against a private room photo (not published).
-  Physical end-to-end testing
-  remains required. The app has no authentication and assumes a trusted LAN.
-
-## Privacy, security, and contributing
-
-No telemetry, analytics, external fonts, CDNs, cloud AI or photo uploads to other
-services. Pairing tokens, photos, databases, `.env` and `/data` are ignored by Git.
-CSRF tokens, same-origin writes, bounded image decoding, private-IP validation,
-restricted media paths and controlled ownership checks protect local operations.
-**Do not expose this UI directly to the public internet.** Use an authenticated VPN
-or reverse proxy if remote access is needed. Protect backups as private data.
-
-Issues and contributions are welcome. Include model/API version and sanitized
-errors, never tokens, MAC addresses, private device names, room photographs or raw
-databases. Add focused tests for behavior changes, run Ruff/pytest and the privacy
-audit, and document which checks were mock versus physical. CI builds the container
-after tests; it never contacts your television. See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-Sunrise/sunset switching supports one shared offset from -360 to +360 minutes. For example, +30 starts Day 30 minutes after sunrise and Night 30 minutes after sunset; negative values switch earlier. Configure approximate coordinates and timezone under Room or Settings. Calculations stay local; the fixed schedule is the fallback when solar events cannot be calculated.
-
-The Room and Settings pages include an offline nearby-city picker (Astral’s bundled city catalog). Selecting a city fills approximate coordinates and timezone; Save schedule enables Auto mode. No geocoding service receives searches. Smaller towns can use a nearby city or manual coordinates.
-
-Recommendations offer **Apply once** or **Always use for this artwork**. The latter saves an artwork override; return it to Automatic on the Artwork page to resume adaptive choices. Both actions recheck the current artwork and Art Mode, honor Never Modify, and verify TV readback. Under Strategy, **Only recommend this style** keeps a chosen native border style while adapting its color.
-
-The everyday interface keeps frame style, room photos and recommendations up front. Enable **Settings → Show advanced controls** for numeric scoring, custom appearance calibration, combination-level preferences and diagnostics. This display preference is remembered in the current browser; it does not change automation settings.
-
-Everyday navigation is Home, Room, Preferences, and Settings. Management pages remain available from Settings. Use a recommendation with **Use this**, then optionally **Keep for this artwork**. Home distinguishes automatic colors, saved artwork choices, paused automation, and setup that needs attention.
-
-### Artwork-only choices
-Under Preferences, Advanced controls can turn off **Also consider room photos and day/night lighting**. With room influence off, recommendations require no room calibration and ignore wall colors, room brightness, accents and day/night transitions entirely. Gallery favors light, low-chroma paper-like borders; the supported TV palette still determines the actual result. Existing installations retain their configured room-aware behavior until this option is changed. Room photos remain saved for optional later use.
+Original application code and generated demo art are MIT licensed. See [LICENSE](LICENSE),
+[third-party notices](THIRD_PARTY_NOTICES.md), and [contributing](CONTRIBUTING.md).
+`samsungtvws` remains LGPL-3.0 as a separately installed, replaceable dependency.
+The Docker image includes its exact corresponding source at
+`/usr/share/adaptive-frame-matte/samsungtvws-source.tar.gz`; retain it and notices
+when redistributing the image. No Samsung artwork or incompatible matte data is included.

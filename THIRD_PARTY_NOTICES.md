@@ -1,6 +1,6 @@
 # Third-party software
 
-Adaptive Frame Matte's original code, generated reference pattern, and generated
+Adaptive Frame Matte's original code and generated
 mock artworks are MIT licensed. No third-party matte color table is copied.
 Device-reported RGB values stay in the local database. The tiny nominal fallback
 table is an original estimate, not measured Samsung color data.
@@ -21,7 +21,7 @@ is imposed. If distributing container images, retain these notices and provide
 the exact corresponding library source with your distribution (see README).
 
 Other direct dependencies: FastAPI, Starlette, Uvicorn, Jinja2, python-multipart,
-Pillow, NumPy, scikit-image, OpenCV, Astral, HTTPX, tzdata. These use MIT, BSD,
+Pillow, NumPy, scikit-image and HTTPX. These use MIT, BSD,
 Apache-2.0, HPND/Pillow, or public-domain/IANA terms. Development tools pytest,
 pytest-asyncio and Ruff have permissive licenses. Transitive dependency licenses
 remain with their installed distributions. certifi's unmodified certificate data
@@ -29,7 +29,7 @@ is MPL-2.0, available at https://github.com/certifi/python-certifi; PSF-licensed
 components retain their notices. A development-environment inventory is included
 in `dependency-licenses.json` (container/platform versions can differ).
 scikit-image provides D65 sRGB/CIELAB
-conversion and CIEDE2000; OpenCV provides ArUco detection and perspective transforms.
+conversion and CIEDE2000.
 
 The MIT license on this application does not replace dependency licenses.
 Samsung trademarks belong to Samsung. No Samsung artwork is included.

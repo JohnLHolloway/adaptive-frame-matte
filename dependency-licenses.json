@@ -67,12 +67,6 @@
   },
   {
     "License": "Apache Software License",
-    "Name": "astral",
-    "URL": "https://github.com/sffjunkie/astral",
-    "Version": "3.2"
-  },
-  {
-    "License": "Apache Software License",
     "Name": "async-timeout",
     "URL": "https://github.com/aio-libs/async-timeout",
     "Version": "5.0.1"
@@ -178,12 +172,6 @@
     "Name": "numpy",
     "URL": "https://numpy.org",
     "Version": "2.5.3"
-  },
-  {
-    "License": "Apache Software License",
-    "Name": "opencv-python-headless",
-    "URL": "https://github.com/opencv/opencv-python",
-    "Version": "5.0.0.93"
   },
   {
     "License": "Apache-2.0 OR BSD-2-Clause",
@@ -298,12 +286,6 @@
     "Name": "typing_extensions",
     "URL": "https://github.com/python/typing_extensions",
     "Version": "4.16.0"
-  },
-  {
-    "License": "Apache-2.0",
-    "Name": "tzdata",
-    "URL": "https://github.com/python/tzdata",
-    "Version": "2026.4"
   },
   {
     "License": "MIT",

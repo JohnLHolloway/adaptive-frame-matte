@@ -4,15 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "adaptive-frame-matte"
-version = "0.2.3"
+version = "0.3.0"
 description = "Local, explainable adaptive mattes for Samsung Frame TVs"
 requires-python = ">=3.12"
 license = "MIT"
 dependencies = [
   "fastapi>=0.115,<1", "uvicorn[standard]>=0.34,<1", "jinja2>=3.1.6,<4",
   "python-multipart>=0.0.22,<1", "pillow>=12,<13", "numpy>=2,<3",
-  "scikit-image>=0.25,<1", "opencv-python-headless>=4.11,<6", "astral>=3.2,<4",
-  "tzdata>=2025.1", "httpx>=0.28,<1",
+  "scikit-image>=0.25,<1",
+  "httpx>=0.28,<1",
   "samsungtvws @ git+https://github.com/NickWaterton/samsung-tv-ws-api.git@fe95ef1d784cd32f49bf9a07ec479576574eea07",
 ]
 

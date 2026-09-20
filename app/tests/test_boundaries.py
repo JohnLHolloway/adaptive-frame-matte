@@ -6,7 +6,6 @@ import pytest
 
 from app.artwork.providers import ArtworkImageProvider
 from app.db import Persistence
-from app.room.calibration import RoomCalibrationService
 from app.samsung.client import SamsungClient
 from app.samsung.mock import MockFrameClient, sample
 
@@ -183,29 +182,4 @@ async def test_invalid_thumbnail_uses_local_reference(tmp_path):
     acquired = await provider.acquire(client, client.current)
     assert acquired["image_source"] == "local"
     assert acquired["analysis"]["palette"]
-    db.close()
-
-
-async def test_cleanup_refuses_reused_content_id(tmp_path):
-    db = Persistence(tmp_path)
-    service = RoomCalibrationService(db)
-    c = MockFrameClient()
-    state = await service.start(c)
-    await service.finish(c)
-    c.images[state["content_id"]] = sample()
-    with pytest.raises(ValueError):
-        await service.remove_owned(c, state["content_id"])
-    assert state["content_id"] in c.images
-    db.close()
-
-
-async def test_cleanup_refuses_other_tv(tmp_path):
-    db = Persistence(tmp_path)
-    service = RoomCalibrationService(db)
-    c = MockFrameClient()
-    state = await service.start(c)
-    await service.finish(c)
-    db.put("config", "tv_ip", "192.168.1.60")
-    with pytest.raises(ValueError, match="different television"):
-        await service.remove_owned(c, state["content_id"])
     db.close()
