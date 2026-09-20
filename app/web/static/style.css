@@ -14,3 +14,5 @@ button,.button,nav a{min-height:44px}input,select{font-size:16px}.grid{grid-temp
 
 body:not(.advanced) .advanced-only{display:none!important}.color-palette{display:grid;grid-template-columns:repeat(auto-fit,minmax(95px,1fr));gap:18px;margin-top:22px}.color-palette>div{display:flex;flex-direction:column;align-items:center;gap:8px;text-transform:capitalize}.color-palette .swatch{width:42px;height:42px;border-radius:50%;margin:0}
 select,input:not([type=checkbox]):not([type=radio]){max-width:100%;min-width:0}form,label{min-width:0}form select{width:100%}
+
+.settings-links{display:grid;gap:8px}.settings-links a{padding:12px 0;min-height:44px;border-bottom:1px solid #dedfd7}.tv-picker[hidden]{display:none}

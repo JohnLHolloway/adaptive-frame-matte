@@ -379,3 +379,5 @@ The Room and Settings pages include an offline nearby-city picker (Astral’s bu
 Recommendations offer **Apply once** or **Always use for this artwork**. The latter saves an artwork override; return it to Automatic on the Artwork page to resume adaptive choices. Both actions recheck the current artwork and Art Mode, honor Never Modify, and verify TV readback. Under Strategy, **Only recommend this style** keeps a chosen native border style while adapting its color.
 
 The everyday interface keeps frame style, room photos and recommendations up front. Enable **Settings → Show advanced controls** for numeric scoring, custom appearance calibration, combination-level preferences and diagnostics. This display preference is remembered in the current browser; it does not change automation settings.
+
+Everyday navigation is Home, Room, Preferences, and Settings. Management pages remain available from Settings. Use a recommendation with **Use this**, then optionally **Keep for this artwork**. Home distinguishes automatic colors, saved artwork choices, paused automation, and setup that needs attention.

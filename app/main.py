@@ -166,6 +166,9 @@ def create_app(directory=None, mock=None):
         return {
             **w.state,
             "settings": w.settings,
+            "current_override": db().get(
+                "overrides", w.state.get("current", {}).get("content_id", ""), {"mode": "automatic"}
+            ),
             "device": db().get("config", "device", {}),
             "capabilities": caps,
             "rooms": db().all("rooms"),
